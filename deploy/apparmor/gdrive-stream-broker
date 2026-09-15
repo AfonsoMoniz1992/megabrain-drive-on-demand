@@ -1,0 +1,50 @@
+# GDriveStreaming OAuth broker — AppArmor profile for a root-owned system service.
+#
+# This is intentionally paired with deploy/systemd/gdrive-stream-broker.system.service.
+# The systemd mount namespace hides /home; these explicit denials make the
+# policy defence-in-depth and cover a future unit regression.
+#include <tunables/global>
+
+profile gdrive-stream-broker flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+  #include <abstractions/nameservice>
+  #include <abstractions/ssl_certs>
+
+  # Node runtime and immutable root-owned release.
+  /usr/bin/node mr,
+  /usr/lib/** mr,
+  /usr/lib64/** mr,
+  /lib/** mr,
+  /lib64/** mr,
+  /usr/share/** r,
+  /opt/ r,
+  /opt/gdrive-stream-broker/** r,
+
+  # Operator-provided non-secret configuration and root-controlled credentials.
+  /etc/gdrive-stream-broker/ r,
+  /etc/gdrive-stream-broker/runtime.env r,
+  /etc/gdrive-stream-broker/secrets/ r,
+  /etc/gdrive-stream-broker/secrets/* r,
+
+  # The service's encrypted refresh/enrollment state only.
+  /var/ r,
+  /var/lib/ r,
+  /var/lib/gdrive-stream-broker/ rw,
+  /var/lib/gdrive-stream-broker/** rwk,
+
+  /dev/null rw,
+  /dev/urandom r,
+  /proc/** r,
+
+  # Local listener, system resolver and the outbound OAuth/Drive TLS flow.
+  network unix stream,
+  network inet stream,
+  network inet dgram,
+  network inet6 stream,
+  network inet6 dgram,
+
+  # Never allow a broker compromise to cross into an operator's home/Drive tree.
+  deny /home/** rwlkmx,
+  deny /root/** rwlkmx,
+  deny /run/user/** rwlkmx,
+}

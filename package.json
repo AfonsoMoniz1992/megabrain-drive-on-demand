@@ -1,0 +1,29 @@
+{
+  "name": "obsidian-gdrive-streaming",
+  "version": "0.2.1",
+  "description": "Safety-first Google Drive on-demand access for Obsidian GDriveStreaming vaults",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "check": "tsc --noEmit -skipLibCheck",
+    "test": "vitest run",
+    "build": "node esbuild.config.mjs production",
+    "broker:build": "tsc -p broker/tsconfig.json",
+    "broker:start": "node broker/dist/index.js",
+    "dev": "node esbuild.config.mjs",
+    "verify": "npm run check && npm run test && npm run build && npm run broker:build"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.28.2",
+    "obsidian": "^1.13.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "@noble/ciphers": "^2.4.0",
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0"
+  }
+}

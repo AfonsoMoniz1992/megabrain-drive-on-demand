@@ -1,0 +1,7 @@
+node_modules/
+broker/dist/
+*.tsbuildinfo
+.gdrive-stream-drive-cache/
+.env
+.env.*
+!.env.example

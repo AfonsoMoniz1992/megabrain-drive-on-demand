@@ -1,0 +1,53 @@
+# GDriveStreaming OAuth broker — self-hosted system service template.
+# Install as root only after adapting the explicit filesystem roots and proving
+# the mount namespace/AppArmor denials on the target host. No secret value is
+# allowed in this file or in runtime.env; only secret-file paths are referenced.
+
+[Unit]
+Description=GDriveStreaming read-only mobile OAuth broker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gdrive-stream-broker
+Group=gdrive-stream-broker
+WorkingDirectory=/opt/gdrive-stream-broker/current
+EnvironmentFile=/etc/gdrive-stream-broker/runtime.env
+ExecStart=/usr/bin/node broker/dist/index.js
+Restart=on-failure
+RestartSec=5s
+
+StateDirectory=gdrive-stream-broker
+UMask=0077
+NoNewPrivileges=yes
+AppArmorProfile=gdrive-stream-broker
+PrivateTmp=yes
+PrivateMounts=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=tmpfs
+ReadWritePaths=/var/lib/gdrive-stream-broker
+
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET
+SystemCallArchitectures=native
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ProtectClock=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RemoveIPC=yes
+LimitCORE=0
+TasksMax=128
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

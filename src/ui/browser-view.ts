@@ -1,0 +1,184 @@
+import { ItemView, Notice, type WorkspaceLeaf } from "obsidian";
+import type { EnrollmentView } from "../auth/lease-manager";
+import type { IndexedMetadata } from "../drive/metadata-index";
+import { DRIVE_FOLDER_MIME } from "../drive/root-scope";
+import { describeBrowserState } from "./browser-state";
+
+/**
+ * Read-only GDriveStreaming Drive browser (Obsidian ItemView).
+ *
+ * The view is deliberately dumb: every product rule (enrollment gate, root
+ * scope, metadata-only listing, size-capped single-file download) lives in
+ * `browser-state.ts` and is enforced again by the plugin host. This file only
+ * draws metadata and forwards user intent, so there is no create, rename, move,
+ * delete, trash or upload affordance anywhere in the UI.
+ */
+
+export const GDRIVE_STREAM_BROWSER_VIEW_TYPE = "gdrive-stream-drive-browser";
+
+export interface GDriveStreamingBrowserHost {
+  enrollment(): EnrollmentView;
+  fingerprint(): string;
+  /** The operator-configured Drive root these diagnostics refer to. */
+  rootName(): string;
+  /** Lists the configured root (renews the lease if needed). */
+  listRoot(): Promise<IndexedMetadata[]>;
+  /** Lists one in-scope folder. Refuses anything outside the root. */
+  listFolder(folderId: string): Promise<IndexedMetadata[]>;
+  /** Metadata-only search over what has already been listed. */
+  search(query: string): IndexedMetadata[];
+  /** Downloads a single file on demand under the size cap; returns a message. */
+  download(fileId: string): Promise<string>;
+  /** Runs the lease-manager enrollment flow and opens the authorization URL. */
+  enroll(enrollmentCode: string): Promise<void>;
+}
+
+function messageOf(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  return "unexpected error";
+}
+
+function formatSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export class GDriveStreamingBrowserView extends ItemView {
+  private rows: IndexedMetadata[] = [];
+  private folderId: string | null = null;
+  private term = "";
+
+  constructor(leaf: WorkspaceLeaf, private readonly host: GDriveStreamingBrowserHost) {
+    super(leaf);
+  }
+
+  getViewType(): string { return GDRIVE_STREAM_BROWSER_VIEW_TYPE; }
+  getDisplayText(): string { return "GDriveStreaming Drive (read-only)"; }
+  getIcon(): string { return "cloud"; }
+
+  async onOpen(): Promise<void> {
+    this.render();
+    if (this.host.enrollment().status === "enrolled") void this.loadRoot();
+  }
+
+  render(): void {
+    const container = this.contentEl;
+    container.empty();
+    const state = describeBrowserState(this.host.enrollment(), this.host.fingerprint(), this.host.rootName());
+
+    container.createEl("h3", { text: "GDriveStreaming Drive (read-only)" });
+    const summary = container.createDiv({ cls: "gdrive-stream-drive-summary" });
+    summary.createEl("div", { text: `Status: ${state.status === "enrolled" ? "Enrolled" : "Not enrolled"}` });
+    summary.createEl("div", { text: `Device fingerprint: ${state.fingerprint}` });
+    summary.createEl("div", { text: state.reason });
+
+    if (!state.canBrowse) {
+      this.renderEnrollment(container);
+      return;
+    }
+    this.renderBrowser(container);
+  }
+
+  private renderEnrollment(container: HTMLElement): void {
+    const panel = container.createDiv({ cls: "gdrive-stream-not-enrolled" });
+    panel.createEl("h4", { text: "Not enrolled" });
+    panel.createEl("p", { text: "Authorise this device with a one-time enrollment code. Approving access opens your system browser; the code is used once and is never saved." });
+
+    const input = panel.createEl("input", { type: "text", placeholder: "One-time enrollment code" });
+    input.addClass("gdrive-stream-enrollment-code");
+    const button = panel.createEl("button", { text: "Enroll this device" });
+    button.onclick = () => {
+      const code = input.value.trim();
+      if (!code) { new Notice("Enter the one-time enrollment code first."); return; }
+      button.setAttribute("disabled", "true");
+      void (async () => {
+        try {
+          await this.host.enroll(code);
+          input.value = "";
+          new Notice(`Device enrolled. Read-only ${this.host.rootName()} access is ready.`);
+          this.render();
+        } catch (error) {
+          new Notice(`Enrollment failed: ${messageOf(error)}`);
+          button.removeAttribute("disabled");
+          this.render();
+        }
+      })();
+    };
+    panel.createEl("p", { cls: "gdrive-stream-note", text: "Stored on this device: broker URL, device keys, pair id and enrollment status only." });
+  }
+
+  private renderBrowser(container: HTMLElement): void {
+    const toolbar = container.createDiv({ cls: "gdrive-stream-toolbar" });
+
+    const search = toolbar.createEl("input", { type: "search", placeholder: `Search ${this.host.rootName()} metadata` });
+    search.value = this.term;
+    search.oninput = () => { this.term = search.value; };
+    const searchButton = toolbar.createEl("button", { text: "Search" });
+    searchButton.onclick = () => {
+      try {
+        this.folderId = null;
+        this.rows = this.host.search(this.term);
+        this.render();
+      } catch (error) {
+        new Notice(`Search unavailable: ${messageOf(error)}`);
+      }
+    };
+
+    const rootButton = toolbar.createEl("button", { text: `${this.host.rootName()} root` });
+    rootButton.onclick = () => void this.loadRoot();
+
+    toolbar.createEl("span", { cls: "gdrive-stream-readonly-badge", text: "read-only" });
+
+    const list = container.createDiv({ cls: "gdrive-stream-drive-list" });
+    if (!this.rows.length) {
+      list.createEl("p", { text: this.folderId === null ? "No metadata listed yet." : "This folder is empty." });
+    }
+    for (const file of this.rows) {
+      const isFolder = file.mimeType === DRIVE_FOLDER_MIME;
+      const row = list.createDiv({ cls: "gdrive-stream-drive-item" });
+      row.createSpan({ text: isFolder ? "📁 " : "☁️ " });
+      row.createSpan({ cls: "gdrive-stream-drive-name", text: file.name });
+      row.createSpan({
+        cls: "gdrive-stream-drive-meta",
+        text: ` — ${file.mimeType} · ${file.modifiedTime || "unknown time"} · ${formatSize(file.size)}`
+      });
+      const action = row.createEl("button", { text: isFolder ? "Open" : "Download" });
+      action.onclick = () => {
+        action.setAttribute("disabled", "true");
+        void (async () => {
+          try {
+            if (isFolder) {
+              const files = await this.host.listFolder(file.id);
+              this.folderId = file.id;
+              this.rows = files;
+              this.render();
+              return;
+            }
+            const message = await this.host.download(file.id);
+            new Notice(message);
+            action.removeAttribute("disabled");
+          } catch (error) {
+            new Notice(`Read failed: ${messageOf(error)}`);
+            action.removeAttribute("disabled");
+            this.render();
+          }
+        })();
+      };
+    }
+    container.createEl("p", { cls: "gdrive-stream-note", text: "Metadata and on-demand single-file reads only. Nothing is created, renamed, moved, deleted or synced." });
+  }
+
+  private async loadRoot(): Promise<void> {
+    try {
+      this.term = "";
+      this.folderId = null;
+      this.rows = await this.host.listRoot();
+    } catch (error) {
+      new Notice(`Read failed: ${messageOf(error)}`);
+      this.rows = [];
+    }
+    this.render();
+  }
+}
