@@ -1,20 +1,20 @@
-# Android availability
+# Android beta installation
 
-> **Public source pre-release — no public Android installation is currently supported.** No GitHub Release or BRAT beta is published for this repository.
+> **Public self-hosted beta v0.2.1 — Android validation is pending.** The release contains only plugin artefacts. It includes no broker, Google OAuth client, callback host, account, token, or Drive data.
 
-The Android-compatible plugin source and broker design are available for audit and for an operator's own controlled self-hosting work. Physical Android acceptance and end-to-end Google OAuth consent have **not** been recorded. Do not connect a production knowledge tree.
+Use only a disposable local vault, an operator-owned broker, and harmless test data. Do not connect a production knowledge tree.
 
-## Current gate
+## Install with BRAT
 
-Do **not** install BRAT or add this repository as a beta plugin. Public distribution is blocked while the Google OAuth client remains in testing mode and while real consent, iOS validation, and Android validation remain incomplete. The authoritative status is [STATUS.md](STATUS.md); the release criteria are in [RELEASE.md](RELEASE.md).
+1. Install Obsidian from Google Play and open a dedicated test vault.
+2. Install and enable [BRAT](https://github.com/TfTHacker/obsidian42-brat).
+3. In BRAT choose **Add beta plugin**, enter this repository's `owner/repository` identifier, then select **v0.2.1**.
+4. Enable **GDriveStreaming Drive on Demand**.
+5. Configure your own HTTPS broker URL and **Allowed Drive test root**. The root name must match the one configured in your broker's `GDRIVE_STREAM_ALLOWED_ROOT_NAME`.
+6. Enrol only through your own broker and test Google OAuth client. A test-mode client must remain restricted to your intended test users.
 
-## What a future public beta will require
+## Required acceptance before production use
 
-Before any public Android installation steps are published, an independent review must accept non-secret evidence that:
+Android pairing, restart, offline/reconnect, cache behaviour, logout, and re-enrolment are **not yet recorded** for this public beta. Follow [MOBILE_BETA_ACCEPTANCE.md](MOBILE_BETA_ACCEPTANCE.md), record only non-secret evidence in [docs/DEPLOYMENT_EVIDENCE.md](docs/DEPLOYMENT_EVIDENCE.md), and keep use limited to harmless test data.
 
-1. Google consent was completed only against harmless test data.
-2. Android pairing, restart, offline/reconnect, cache behaviour, logout, and re-enrolment passed.
-3. iOS acceptance also passed, because the release artefact is shared.
-4. The operator-hosted broker has completed the isolation and routing checks in [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md).
-
-Google does not support the old out-of-band OAuth flow and an Obsidian plugin cannot add an Android intent filter. The intended design therefore has the operator-hosted broker hold the HTTPS callback and issue short-lived device-bound leases; it does not claim a direct Android OAuth callback.
+Google does not support the old out-of-band OAuth flow and an Obsidian plugin cannot add an Android intent filter. The operator-hosted broker holds the HTTPS callback and issues short-lived device-bound leases; the plugin does not claim a direct Android OAuth callback.

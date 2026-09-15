@@ -1,6 +1,6 @@
 # GDriveStreaming Drive on Demand
 
-> **Status: public source pre-release — BRAT distribution is blocked.** The source and deployment templates are public, but no GitHub Release or BRAT beta is published. Do not connect a production Drive tree until the operator-run OAuth and device gates are complete.
+> **Status: public self-hosted beta.** The v0.2.1 release distributes only plugin artefacts: it contains no broker, OAuth client, callback host, Google account or Drive data. Physical iOS/Android validation is still pending; use only an operator-owned broker and harmless test data.
 
 GDriveStreaming Drive on Demand is a self-hosted, **read-only** Obsidian mobile plugin for browsing an existing Google Drive knowledge tree. It provides a plugin-owned remote browser, metadata search, and explicit on-demand materialisation of one selected file for iOS and Android. It does not turn remote Drive records into native Obsidian vault files.
 
@@ -44,11 +44,14 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) and [SECURITY.md](SECURITY.md) for the tr
 
 > The root name is a two-sided contract. The broker seals it into every device lease and the plugin rejects a lease sealed to a different root. Change it in both places together.
 
-## BRAT availability
+## Install the beta with BRAT
 
-**Do not add this repository to BRAT yet.** A public BRAT release is deliberately blocked while the project OAuth client is in Google testing mode and the required real-consent, iOS, and Android gates are incomplete. See [STATUS.md](STATUS.md), [SECURITY_DECISION.md](SECURITY_DECISION.md), and [MOBILE_BETA_ACCEPTANCE.md](MOBILE_BETA_ACCEPTANCE.md).
+1. In Obsidian, install and enable [BRAT](https://github.com/TfTHacker/obsidian42-brat).
+2. In BRAT, choose **Add beta plugin** and enter this repository's `owner/repository` identifier.
+3. Choose **v0.2.1** and enable **GDriveStreaming Drive on Demand**.
+4. Configure **your own** HTTPS broker URL and the same harmless test-root name on broker and plugin before enrolling a device.
 
-When those gates have independently passed, a tagged GitHub release can be published through the procedure in [RELEASE.md](RELEASE.md). It must still use an operator's own broker URL, OAuth client, and harmless test root.
+This release does not grant access to any shared Google account or service. A Google OAuth client in testing mode must be restricted to the operator's intended test users. Do not connect production data; see [STATUS.md](STATUS.md), [SECURITY_DECISION.md](SECURITY_DECISION.md), and [MOBILE_BETA_ACCEPTANCE.md](MOBILE_BETA_ACCEPTANCE.md).
 
 ## Development and verification
 

@@ -1,20 +1,21 @@
-# Desktop availability
+# Desktop beta installation
 
-> **Public source pre-release — no public plugin distribution is currently supported.** No GitHub Release or BRAT beta is published for this repository.
+> **Public self-hosted beta v0.2.1 — not production-ready.** The release contains plugin artefacts only; it includes no broker, Google OAuth client, callback host, account, token, or Drive data.
 
-The source is public for audit and controlled self-hosting. The implementation is read-only by design, but no production use is approved and no public installation channel is available until the release gates pass.
+## Install with BRAT
 
-## Current gate
+1. Open a disposable/test vault in Obsidian desktop.
+2. Install and enable [BRAT](https://github.com/TfTHacker/obsidian42-brat).
+3. Choose **Add beta plugin**, enter this repository's `owner/repository` identifier, select **v0.2.1**, then enable the plugin.
+4. Configure an operator-owned broker and a harmless test root before attempting enrollment.
 
-Do **not** add this repository to BRAT. Public BRAT distribution is blocked while Google OAuth consent and the required iOS/Android acceptance evidence are incomplete. See [STATUS.md](STATUS.md), [SECURITY_DECISION.md](SECURITY_DECISION.md), and [RELEASE.md](RELEASE.md).
+Do not enter a client secret in Obsidian and do not connect production data. The same operator-owned Google OAuth and broker safeguards described in [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md) apply.
 
-## Development only
-
-A maintainer or self-hosting operator may build and inspect the source locally with:
+## Development
 
 ```bash
 npm ci
 npm run verify
 ```
 
-Do not enter a client secret in Obsidian. A future public beta, if its gates pass, will publish version-matched `manifest.json`, `main.js`, `styles.css`, and checksums through a tagged GitHub release.
+A production recommendation still requires all evidence in [STATUS.md](STATUS.md).

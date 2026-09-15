@@ -11,10 +11,10 @@
 
 ## Risk acceptance and safeguards
 
-This is accepted only for a private, named-user beta against harmless test data.
+This is accepted only for a self-hosted, named-user beta against harmless test data. The public release contains no shared broker or Google OAuth client.
 
 - No connection to a production knowledge tree while the beta is unvalidated.
-- No public BRAT release while the Google OAuth client remains in testing mode.
+- A test-mode Google OAuth client must be limited to the operator's intended test users; never publish its client ID, secret, callback host, or account details in the artefacts or documentation.
 - No refresh token or client secret in the mobile plugin.
 - Device-bound leases are short-lived, revocable and never logged.
 - The plugin refuses a lease sealed to any root other than its configured one, so a broker/plugin root mismatch fails closed instead of browsing the wrong folder.

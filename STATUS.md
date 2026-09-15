@@ -12,13 +12,13 @@ This is the public delivery contract. **Implemented** means the reviewed source 
 | AppArmor defence in depth | Versioned template and tests | Verify an enforcing label on the running broker process |
 | Post-enable acceptance gate | Versioned, tested script | Run it after every deployment or service configuration change |
 | Google OAuth consent | Code-level contracts only | Complete real consent against harmless test data |
-| BRAT installation/update | **Blocked:** no public release is published while required validation is incomplete | Do not add this repository to BRAT until the release gate is explicitly passed |
+| BRAT installation/update | Public v0.2.1 beta artefact; no broker or OAuth client is included | Install only in a disposable/test vault; configure an operator-owned broker and harmless test root |
 | iOS validation | Not yet recorded | OAuth, restart, offline/reconnect, cache, and logout/re-enrol |
 | Android validation | Not yet recorded | OAuth, restart, offline/reconnect, cache, and logout/re-enrol |
 
 ## Release and usage decision
 
-**Public source pre-release: the code may be reviewed and self-hosted, but distribution through BRAT is blocked. It is not production-ready.**
+**Public self-hosted beta: BRAT distributes only the plugin artefacts. It is not production-ready and includes no operated broker, OAuth client, callback host, Google account, or Drive data.**
 
 Before a production Drive tree is ever connected, an operator must:
 
