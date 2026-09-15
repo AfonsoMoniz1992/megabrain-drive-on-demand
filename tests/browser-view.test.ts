@@ -17,6 +17,7 @@ const FINGERPRINT = "9f2c4b6a1d8e0f3a5c7b9d1e2f4a6c8b0d2e4f6a8c1b3d5e7f9a0c2e4b6
 
 const notEnrolledState: EnrollmentView = { pairId: null, status: "not_enrolled", expiresAtMs: null };
 const enrolledState: EnrollmentView = { pairId: "b".repeat(64), status: "enrolled", expiresAtMs: 9_999_999 };
+const awaitingConsentState: EnrollmentView = { pairId: "b".repeat(64), status: "awaiting_consent", expiresAtMs: 1_060_000 };
 
 interface FakeDrive extends BrowserDriveSource {
   calls: string[];
@@ -81,6 +82,23 @@ describe("read-only browser state", () => {
     expect(view.canEnroll).toBe(false);
     expect(view.fingerprint).toBe(FINGERPRINT);
     expect(view.pairId).toBe(enrolledState.pairId);
+  });
+
+  it("reports a pairing that still awaits consent as such, never as enrolled", async () => {
+    const view = describeBrowserState(awaitingConsentState, FINGERPRINT, "example-test-root");
+    expect(view.status).toBe("awaiting_consent");
+    expect(view.canBrowse).toBe(false);
+    // A second enrollment code must not be offered while the first pairing is
+    // still waiting: consuming it would waste the operator's one-time code.
+    expect(view.canEnroll).toBe(false);
+    expect(view.reason).toMatch(/consent/i);
+    expect(browserState.describeEnrollmentLabel(view.status)).toBe("Waiting for Google consent");
+    expect(browserState.describeEnrollmentLabel("enrolled")).toBe("Enrolled");
+    expect(browserState.describeEnrollmentLabel("not_enrolled")).toBe("Not enrolled");
+
+    const { controller, drive } = build({ enrollment: awaitingConsentState });
+    await expect(controller.openRoot()).rejects.toThrow(/not enrolled/i);
+    expect(drive.calls).toEqual([]);
   });
 
   it("names the operator-configured root in diagnostics and scope errors, never a hard-coded default", async () => {

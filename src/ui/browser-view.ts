@@ -1,8 +1,8 @@
-import { ItemView, Notice, type WorkspaceLeaf } from "obsidian";
+import { ItemView, Notice, TFile, type WorkspaceLeaf } from "obsidian";
 import type { EnrollmentView } from "../auth/lease-manager";
 import type { IndexedMetadata } from "../drive/metadata-index";
 import { DRIVE_FOLDER_MIME } from "../drive/root-scope";
-import { describeBrowserState } from "./browser-state";
+import { describeBrowserState, describeEnrollmentLabel } from "./browser-state";
 
 /**
  * Read-only GDriveStreaming Drive browser (Obsidian ItemView).
@@ -21,14 +21,16 @@ export interface GDriveStreamingBrowserHost {
   fingerprint(): string;
   /** The operator-configured Drive root these diagnostics refer to. */
   rootName(): string;
+  /** The broker base URL requests actually go to, for failure diagnostics. */
+  brokerBaseUrl(): string;
   /** Lists the configured root (renews the lease if needed). */
   listRoot(): Promise<IndexedMetadata[]>;
   /** Lists one in-scope folder. Refuses anything outside the root. */
   listFolder(folderId: string): Promise<IndexedMetadata[]>;
   /** Metadata-only search over what has already been listed. */
   search(query: string): IndexedMetadata[];
-  /** Downloads a single file on demand under the size cap; returns a message. */
-  download(fileId: string): Promise<string>;
+  /** Downloads a single file on demand under the size cap into the vault cache. */
+  download(fileId: string): Promise<{ message: string; path: string }>;
   /** Runs the lease-manager enrollment flow and opens the authorization URL. */
   enroll(enrollmentCode: string): Promise<void>;
 }
@@ -70,15 +72,33 @@ export class GDriveStreamingBrowserView extends ItemView {
 
     container.createEl("h3", { text: "GDriveStreaming Drive (read-only)" });
     const summary = container.createDiv({ cls: "gdrive-stream-drive-summary" });
-    summary.createEl("div", { text: `Status: ${state.status === "enrolled" ? "Enrolled" : "Not enrolled"}` });
+    summary.createEl("div", { text: `Status: ${describeEnrollmentLabel(state.status)}` });
     summary.createEl("div", { text: `Device fingerprint: ${state.fingerprint}` });
     summary.createEl("div", { text: state.reason });
 
+    if (state.status === "awaiting_consent") {
+      this.renderAwaitingConsent(container);
+      return;
+    }
     if (!state.canBrowse) {
       this.renderEnrollment(container);
       return;
     }
     this.renderBrowser(container);
+  }
+
+  /**
+   * Pairing exists but no lease has been issued yet, so the enrolment form is
+   * withheld (a second code would be wasted) and the operator is told to finish
+   * the approval that is already waiting in the browser.
+   */
+  private renderAwaitingConsent(container: HTMLElement): void {
+    const panel = container.createDiv({ cls: "gdrive-stream-awaiting-consent" });
+    panel.createEl("h4", { text: "Waiting for Google consent" });
+    panel.createEl("p", { text: "Approve read-only access in the browser window that just opened. Enrolment completes only when that approval returns; until then this device holds no usable lease." });
+    const retry = panel.createEl("button", { text: "Check status again" });
+    retry.onclick = () => this.render();
+    panel.createEl("p", { cls: "gdrive-stream-note", text: `Diagnostics: broker ${this.host.brokerBaseUrl()} · root ${this.host.rootName()}` });
   }
 
   private renderEnrollment(container: HTMLElement): void {
@@ -156,11 +176,12 @@ export class GDriveStreamingBrowserView extends ItemView {
               this.render();
               return;
             }
-            const message = await this.host.download(file.id);
-            new Notice(message);
+            const downloaded = await this.host.download(file.id);
+            new Notice(downloaded.message);
+            await this.openDownloaded(downloaded.path);
             action.removeAttribute("disabled");
           } catch (error) {
-            new Notice(`Read failed: ${messageOf(error)}`);
+            new Notice(`Read failed: ${messageOf(error)} ${this.diagnostics()}`);
             action.removeAttribute("disabled");
             this.render();
           }
@@ -176,9 +197,28 @@ export class GDriveStreamingBrowserView extends ItemView {
       this.folderId = null;
       this.rows = await this.host.listRoot();
     } catch (error) {
-      new Notice(`Read failed: ${messageOf(error)}`);
+      new Notice(`Read failed: ${messageOf(error)} ${this.diagnostics()}`);
       this.rows = [];
     }
     this.render();
+  }
+
+  /**
+   * The two configuration values a failure usually comes from, appended to
+   * error notices. A truncated broker URL or a stray value in the wrong field
+   * is then visible in the failure itself instead of costing an investigation.
+   */
+  private diagnostics(): string {
+    return `[broker ${this.host.brokerBaseUrl()} · root ${this.host.rootName()}]`;
+  }
+
+  /** Opens the note that was just downloaded so a click shows its content. */
+  private async openDownloaded(path: string): Promise<void> {
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (file instanceof TFile) {
+      await this.app.workspace.getLeaf(false).openFile(file);
+      return;
+    }
+    new Notice(`Downloaded to ${path}. Open it from the file explorer to read it.`);
   }
 }

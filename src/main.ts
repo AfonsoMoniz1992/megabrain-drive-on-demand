@@ -7,7 +7,7 @@ import {
 import { loadOrCreateDeviceIdentity, saveDeviceIdentity } from "./auth/device-identity-store";
 import { LeaseManager, type EnrollmentView } from "./auth/lease-manager";
 import { logoutDeviceSession } from "./auth/logout-device-session";
-import { buildPersistedPluginData } from "./auth/persistence";
+import { buildPersistedPluginData, toPersistedEnrollment } from "./auth/persistence";
 import { publishCacheFile } from "./core/atomic-cache-write";
 import { PLUGIN_CACHE_ROOT, cachePathForRemoteFile } from "./core/path";
 import type { RemoteFile } from "./core/remote-index";
@@ -29,7 +29,7 @@ import {
   type GDriveStreamingSettings
 } from "./settings";
 import { LatestWriteQueue } from "./settings-write-queue";
-import { BrowserController, describeBrowserState } from "./ui/browser-state";
+import { BrowserController, describeBrowserState, describeEnrollmentLabel } from "./ui/browser-state";
 import { GDRIVE_STREAM_BROWSER_VIEW_TYPE, GDriveStreamingBrowserView, type GDriveStreamingBrowserHost } from "./ui/browser-view";
 
 /**
@@ -105,7 +105,7 @@ export default class GDriveStreamingDrivePlugin extends Plugin {
     const data = buildPersistedPluginData({
       brokerBaseUrl: String(persisted.brokerBaseUrl),
       allowedRootName: String(persisted.allowedRootName ?? ""),
-      enrollment: { pairId: enrollment.pairId, status: enrollment.status, expiresAtMs: enrollment.expiresAtMs },
+      enrollment: toPersistedEnrollment(enrollment),
       legacy: {
         driveRootId: String(persisted.driveRootId ?? ""),
         remoteFiles: Array.isArray(persisted.remoteFiles) ? (persisted.remoteFiles as RemoteFile[]) : [],
@@ -248,6 +248,7 @@ export default class GDriveStreamingDrivePlugin extends Plugin {
       enrollment: () => this.leaseManager.enrollment,
       fingerprint: () => this.deviceFingerprint(),
       rootName: () => this.settings.allowedRootName || allowedRootNameForRuntime(this.settings.allowedRootName),
+      brokerBaseUrl: () => brokerBaseUrlForRuntime(this.settings.brokerBaseUrl),
       listRoot: () => this.browse(() => this.controller.openRoot()),
       listFolder: (folderId: string) => this.browse(() => this.controller.openFolder(folderId)),
       search: (query: string) => this.controller.search(query),
@@ -306,7 +307,7 @@ export default class GDriveStreamingDrivePlugin extends Plugin {
   }
 
   /** Explicit single-file download into the fixed plugin cache namespace. */
-  private async downloadFile(fileId: string): Promise<string> {
+  private async downloadFile(fileId: string): Promise<{ message: string; path: string }> {
     await this.authorizeDrive();
     const downloaded = await this.controller.download(fileId);
     const path = cachePathForRemoteFile(PLUGIN_CACHE_ROOT, downloaded.fileId, downloaded.name || downloaded.fileId);
@@ -322,7 +323,10 @@ export default class GDriveStreamingDrivePlugin extends Plugin {
       path,
       bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
     );
-    return `Downloaded ${downloaded.name || downloaded.fileId} (${bytes.byteLength} bytes) to ${path}. No vault-wide sync was performed.`;
+    return {
+      message: `Downloaded ${downloaded.name || downloaded.fileId} (${bytes.byteLength} bytes) to ${path}. No vault-wide sync was performed.`,
+      path
+    };
   }
 
   private async renewLease(): Promise<void> {
@@ -350,12 +354,19 @@ class GDriveStreamingSettingsTab extends PluginSettingTab {
 
     const state = describeBrowserState(this.plugin.enrollmentState(), this.plugin.deviceFingerprint(), this.plugin.settings.allowedRootName || "unconfigured");
     const status = containerEl.createDiv({ cls: "gdrive-stream-settings-status" });
-    status.createEl("p", { text: `Enrollment status: ${state.status === "enrolled" ? "Enrolled" : "Not enrolled"}` });
+    status.createEl("p", { text: `Enrollment status: ${describeEnrollmentLabel(state.status)}` });
     status.createEl("p", { text: "Device enrollment fingerprint (copy the full 64-character value):" });
     const fingerprintInput = status.createEl("input", { type: "text", value: state.fingerprint });
     fingerprintInput.readOnly = true;
     fingerprintInput.setAttribute("aria-label", "Device enrollment fingerprint");
     status.createEl("p", { text: state.reason });
+    // The values requests will actually use. A value that was truncated, or
+    // pasted into the wrong field, is visible here instead of only at the broker.
+    const effectiveBroker = this.plugin.settings.brokerBaseUrl === ""
+      ? "not configured — enrolment is blocked"
+      : brokerBaseUrlForRuntime(this.plugin.settings.brokerBaseUrl);
+    status.createEl("p", { cls: "gdrive-stream-settings-effective", text: `Effective broker base URL: ${effectiveBroker}` });
+    status.createEl("p", { cls: "gdrive-stream-settings-effective", text: `Effective Drive test root: ${this.plugin.settings.allowedRootName || "not configured"}` });
 
     new Setting(containerEl)
       .setName("Broker base URL")
@@ -363,6 +374,9 @@ class GDriveStreamingSettingsTab extends PluginSettingTab {
       .addText((text) => text
         .setValue(this.plugin.settings.brokerBaseUrl)
         .onChange(async (value) => {
+          if (value.trim() !== "" && normalizeBrokerBaseUrl(value) === "") {
+            new Notice("Broker base URL not saved: it must be an https origin with no credentials, query, fragment or extra text appended.");
+          }
           await this.plugin.updateBrokerBaseUrl(value);
         }));
 
@@ -373,6 +387,9 @@ class GDriveStreamingSettingsTab extends PluginSettingTab {
         .setValue(this.plugin.settings.allowedRootName)
         .setPlaceholder("your-harmless-test-root")
         .onChange(async (value) => {
+          if (value.trim() !== "" && normalizeAllowedRootName(value) === "") {
+            new Notice("Allowed Drive test root not saved: use a single folder name with no slashes, control characters or appended text.");
+          }
           await this.plugin.updateAllowedRootName(value);
         }));
 

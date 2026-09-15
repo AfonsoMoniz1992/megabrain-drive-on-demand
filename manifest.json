@@ -1,7 +1,7 @@
 {
   "id": "obsidian-gdrive-streaming",
   "name": "GDriveStreaming Drive on Demand",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "minAppVersion": "1.11.4",
   "description": "Safety-first on-demand access to a Google Drive GDriveStreaming.",
   "author": "GDriveStreaming contributors",

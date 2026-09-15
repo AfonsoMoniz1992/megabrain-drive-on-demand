@@ -105,3 +105,23 @@ export function buildPersistedPluginData(input: PersistedMobileState & { legacy?
   assertPersistablePluginData(data);
   return data;
 }
+
+/**
+ * Maps the live enrollment view onto the only enrollment state a beta build may
+ * persist.
+ *
+ * A pairing that is still waiting for the browser approval is deliberately NOT
+ * persisted: the pairing window is minutes long, so writing it as enrolled would
+ * make the next session claim an authorisation that was never granted. Only a
+ * pairing that actually received a lease is durable.
+ */
+export function toPersistedEnrollment(enrollment: {
+  pairId: string | null;
+  status: string;
+  expiresAtMs: number | null;
+}): PersistedMobileState["enrollment"] {
+  if (enrollment.status === "enrolled" && enrollment.pairId) {
+    return { pairId: enrollment.pairId, status: "enrolled", expiresAtMs: enrollment.expiresAtMs };
+  }
+  return { pairId: null, status: "not_enrolled", expiresAtMs: null };
+}

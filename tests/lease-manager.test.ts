@@ -208,4 +208,54 @@ describe("lease manager", () => {
     expect(serialized).not.toContain("ya29");
     expect(serialized).not.toContain("accessToken");
   });
+
+  /**
+   * Regression: a bare pairing used to be reported as `enrolled`, so the UI
+   * announced success before Google consent had been granted and then flipped
+   * back to not enrolled once the pairing window closed.
+   */
+  it("never reports enrolled between pairing and the consent approval", async () => {
+    const identity = generateDeviceIdentity();
+    const seen: string[] = [];
+    const statusWhenBrowserOpened: string[] = [];
+    const manager = new LeaseManager({
+      broker: new BrokerClient({ baseUrl: BASE_URL, request: async (request) => {
+        if (request.url.endsWith("/oauth/pair")) {
+          return { status: 201, json: { pairId: "d".repeat(64), oauthState: "s", proofMessage: PROOF_MESSAGE, expiresAtMs: 1_010_000, authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth" } };
+        }
+        if (request.url.endsWith("/oauth/claim")) {
+          return { status: 200, json: { sealedLease: sealLeaseEnvelope(identity.x25519PublicKey, payload("ya29.lease-1", 300_000)), expiresAtMs: 1_600_000 } };
+        }
+        throw new Error(`unexpected ${request.url}`);
+      } }),
+      identity,
+      openAuthorizationUrl: () => { statusWhenBrowserOpened.push(manager.enrollment.status); },
+      now: () => 1_000_000,
+      sleep: async () => undefined,
+      onEnrollment: (state) => { seen.push(state.status); }
+    });
+
+    await manager.enroll(ENROLLMENT_CODE);
+
+    expect(statusWhenBrowserOpened).toEqual(["awaiting_consent"]);
+    expect(seen).toContain("awaiting_consent");
+    expect(seen.indexOf("awaiting_consent")).toBeLessThan(seen.indexOf("enrolled"));
+    expect(manager.enrollment.status).toBe("enrolled");
+  });
+
+  it("returns to not_enrolled with no pair id when the consent window expires", async () => {
+    const identity = generateDeviceIdentity();
+    const h = harness({ identity, claimStatuses: [409, 409, 409, 409, 409, 409, 409, 409] });
+
+    await expect(h.manager.enroll(ENROLLMENT_CODE)).rejects.toMatchObject({ code: "expired" });
+    expect(h.manager.enrollment).toEqual({ pairId: null, status: "not_enrolled", expiresAtMs: null });
+  });
+
+  it("treats a persisted pairing as authorised across a restart, without a lease", () => {
+    const identity = generateDeviceIdentity();
+    const h = harness({ identity, initialPairId: "b".repeat(64) });
+
+    expect(h.manager.enrollment.status).toBe("enrolled");
+    expect(h.manager.enrolled).toBe(false);
+  });
 });

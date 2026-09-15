@@ -6,7 +6,8 @@ import {
   ALLOWED_PLUGIN_DATA_ROOT_KEYS,
   assertPersistablePluginData,
   buildPersistedPluginData,
-  findForbiddenPersistence
+  findForbiddenPersistence,
+  toPersistedEnrollment
 } from "../src/auth/persistence";
 
 const BASE_URL = "https://broker.example.test/gdrive-stream-oauth";
@@ -16,6 +17,26 @@ const CLIENT_SECRET = "GOCSPX-example-client-secret";
 const JWT = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxIn0.signature-value";
 
 describe("mobile beta persistence guard", () => {
+  it("never persists a pairing that is still waiting for consent", () => {
+    // The pairing window is minutes long, so a pending pairing must not survive
+    // a restart as an authorisation that was never granted.
+    expect(toPersistedEnrollment({ pairId: "b".repeat(64), status: "awaiting_consent", expiresAtMs: 1_060_000 })).toEqual({
+      pairId: null,
+      status: "not_enrolled",
+      expiresAtMs: null
+    });
+    expect(toPersistedEnrollment({ pairId: "b".repeat(64), status: "enrolled", expiresAtMs: 5 })).toEqual({
+      pairId: "b".repeat(64),
+      status: "enrolled",
+      expiresAtMs: 5
+    });
+    expect(toPersistedEnrollment({ pairId: null, status: "not_enrolled", expiresAtMs: null })).toEqual({
+      pairId: null,
+      status: "not_enrolled",
+      expiresAtMs: null
+    });
+  });
+
   it("allowlists only non-secret mobile beta state", () => {
     expect([...ALLOWED_PLUGIN_DATA_ROOT_KEYS].sort()).toEqual(["allowedRootName", "brokerBaseUrl", "changesPageToken", "driveRootId", "enrollment", "remoteFiles"]);
   });

@@ -18,7 +18,19 @@ import type { DriveRootScope } from "../drive/root-scope";
 
 export const BETA_DOWNLOAD_LIMIT_BYTES = DEFAULT_MAX_DOWNLOAD_BYTES;
 
-export type BrowserStatus = "not_enrolled" | "enrolled";
+export type BrowserStatus = "not_enrolled" | "awaiting_consent" | "enrolled";
+
+/**
+ * Single source of truth for the status wording shown to an operator. Never
+ * upgrade this to say "Enrolled" for a state that still lacks a lease: the
+ * earlier unconditional "Enrolled" on a bare pairing made a device look
+ * authorised while Google consent had not been granted yet.
+ */
+export function describeEnrollmentLabel(status: BrowserStatus): string {
+  if (status === "enrolled") return "Enrolled";
+  if (status === "awaiting_consent") return "Waiting for Google consent";
+  return "Not enrolled";
+}
 
 export interface BrowserViewState {
   status: BrowserStatus;
@@ -37,16 +49,19 @@ export interface BrowserViewState {
  */
 export function describeBrowserState(enrollment: EnrollmentView, fingerprint: string, rootName: string): BrowserViewState {
   const enrolled = enrollment.status === "enrolled" && Boolean(enrollment.pairId);
+  const awaitingConsent = enrollment.status === "awaiting_consent";
   return {
-    status: enrolled ? "enrolled" : "not_enrolled",
+    status: enrolled ? "enrolled" : awaitingConsent ? "awaiting_consent" : "not_enrolled",
     canBrowse: enrolled,
-    canEnroll: !enrolled,
+    canEnroll: !enrolled && !awaitingConsent,
     fingerprint,
     pairId: enrollment.pairId,
     expiresAtMs: enrollment.expiresAtMs,
     reason: enrolled
       ? `Enrolled read-only. Browsing is limited to the ${rootName} folder.`
-      : "Not enrolled. Enter a one-time enrollment code to authorise this device, then approve access in the browser."
+      : awaitingConsent
+        ? "Paired, waiting for Google consent. Approve read-only access in the browser window that just opened; nothing is readable until that approval returns."
+        : "Not enrolled. Enter a one-time enrollment code to authorise this device, then approve access in the browser."
   };
 }
 

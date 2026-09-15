@@ -22,7 +22,13 @@ export const DEFAULT_ROOT_FOLDER_NAME = BETA_ROOT_FOLDER_NAME;
 export const DEFAULT_CLAIM_POLL_INTERVAL_MS = 2_000;
 export const DEFAULT_RENEWAL_LEAD_MS = 60_000;
 
-export type EnrollmentStatus = "not_enrolled" | "enrolled";
+/**
+ * `awaiting_consent` is the window between a successful pairing and the
+ * approval coming back from the browser. No lease exists yet, so it must never
+ * be reported as `enrolled`: doing so made the UI claim success before Google
+ * consent had been granted (and then flip back once the pairing expired).
+ */
+export type EnrollmentStatus = "not_enrolled" | "awaiting_consent" | "enrolled";
 
 export interface EnrollmentView {
   pairId: string | null;
@@ -66,6 +72,8 @@ export class LeaseManager {
   private readonly onEnrollment?: (state: EnrollmentView) => void;
 
   private pairId: string | null;
+  private consentPending = false;
+  private pairExpiresAtMs: number | null = null;
   private accessToken: string | null = null;
   private accessTokenExpiresAtMs = 0;
   private lease: LeaseView | null = null;
@@ -88,10 +96,21 @@ export class LeaseManager {
   }
 
   get enrollment(): EnrollmentView {
-    // A persisted pairId means the device is still paired: after a plugin
+    // A persisted pairId means the device is still registered: after a plugin
     // restart the lease is simply missing, so it is reported as enrolled and
     // renewed on next use rather than forcing a full re-enrollment.
-    return { pairId: this.pairId, status: this.lease || this.pairId ? "enrolled" : "not_enrolled", expiresAtMs: this.lease ? this.lease.expiresAtMs : null };
+    return { pairId: this.pairId, status: this.statusOf(), expiresAtMs: this.expiryOf() };
+  }
+
+  private statusOf(): EnrollmentStatus {
+    if (this.lease) return "enrolled";
+    if (this.consentPending) return "awaiting_consent";
+    return this.pairId ? "enrolled" : "not_enrolled";
+  }
+
+  private expiryOf(): number | null {
+    if (this.lease) return this.lease.expiresAtMs;
+    return this.consentPending ? this.pairExpiresAtMs : null;
   }
 
   /** True only while a device-bound lease is still usable without renewal. */
@@ -110,6 +129,8 @@ export class LeaseManager {
   /** Forgets the pairing and the in-memory token (logout / revocation). */
   clear(): void {
     this.pairId = null;
+    this.consentPending = false;
+    this.pairExpiresAtMs = null;
     this.accessToken = null;
     this.accessTokenExpiresAtMs = 0;
     this.lease = null;
@@ -130,6 +151,8 @@ export class LeaseManager {
       deviceEncryptionPublicKeyPem: exportX25519SpkiPem(this.identity.x25519PublicKey)
     });
     this.pairId = pair.pairId;
+    this.consentPending = true;
+    this.pairExpiresAtMs = pair.expiresAtMs;
     this.emit(pair.expiresAtMs);
     await this.openAuthorizationUrl(pair.authorizationUrl);
     const claim = await this.claimUntilAuthorized(pair.pairId, pair.proofMessage, pair.expiresAtMs);
@@ -155,6 +178,8 @@ export class LeaseManager {
       }
     }
     this.pairId = null;
+    this.consentPending = false;
+    this.pairExpiresAtMs = null;
     this.emit();
     throw new BrokerError("expired", 410);
   }
@@ -198,15 +223,13 @@ export class LeaseManager {
     this.accessToken = payload.accessToken;
     this.accessTokenExpiresAtMs = payload.expiresAtMs;
     this.lease = view;
+    this.consentPending = false;
+    this.pairExpiresAtMs = null;
     this.emit();
     return { ...view };
   }
 
   private emit(expiresAtMs?: number): void {
-    this.onEnrollment?.({
-      pairId: this.pairId,
-      status: this.lease ? "enrolled" : "not_enrolled",
-      expiresAtMs: expiresAtMs ?? (this.lease ? this.lease.expiresAtMs : null)
-    });
+    this.onEnrollment?.({ pairId: this.pairId, status: this.statusOf(), expiresAtMs: expiresAtMs ?? this.expiryOf() });
   }
 }

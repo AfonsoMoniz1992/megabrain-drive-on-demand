@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.2.5 — honest enrollment state and on-demand note opening
+
+### Fixed
+
+- Enrollment now has three truthful states: `Not enrolled`, `Waiting for Google consent` (a pairing exists but no lease has been issued yet) and `Enrolled`. Previously any non-null pairing was rendered as enrolled, so the plugin announced success before Google consent had been granted and then flipped back to not enrolled when the pairing window closed.
+- A pairing still waiting for consent is never persisted, so a restart cannot present an authorisation that was never granted.
+- The enrollment form is withheld while a pairing waits for consent, so a second one-time code cannot be consumed by accident.
+
+### Added
+
+- Clicking a note in the read-only browser now opens it right after the on-demand download, instead of only reporting the local cache path.
+- Settings display the **effective** broker base URL and Drive test root used for requests, and a value that cannot be stored raises a visible notice instead of silently failing closed.
+- Failure notices include the effective broker base URL and root, so a truncated URL or a value pasted into the wrong field is visible in the error itself.
+
+### Notes
+
+- Broker pairing, lease, scoped root and read-only boundaries are unchanged.
+
 ## v0.2.4 — preserve mobile enrollment on no-op settings events
 
 ### Fixed
