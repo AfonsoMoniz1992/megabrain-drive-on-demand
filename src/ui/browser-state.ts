@@ -61,7 +61,7 @@ export interface BrowserControllerOptions {
   scope: DriveRootScope;
   index: MetadataIndex;
   enrollment: () => EnrollmentView;
-  /** Short read-only device fingerprint shown alongside the enrollment state. */
+  /** Canonical 64-character device enrollment fingerprint shown alongside the enrollment state. */
   fingerprint?: () => string;
   maxDownloadBytes?: number;
 }

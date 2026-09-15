@@ -12,7 +12,7 @@ This is the public delivery contract. **Implemented** means the reviewed source 
 | AppArmor defence in depth | Versioned template and tests | Verify an enforcing label on the running broker process |
 | Post-enable acceptance gate | Versioned, tested script | Run it after every deployment or service configuration change |
 | Google OAuth consent | Code-level contracts only | Complete real consent against harmless test data |
-| BRAT installation/update | Public v0.2.1 beta artefact; no broker or OAuth client is included | Install only in a disposable/test vault; configure an operator-owned broker and harmless test root |
+| BRAT installation/update | Public v0.2.2 beta artefact; no broker or OAuth client is included | Install only in a disposable/test vault; copy the full canonical device fingerprint and configure an operator-owned broker with a harmless test root |
 | iOS validation | Not yet recorded | OAuth, restart, offline/reconnect, cache, and logout/re-enrol |
 | Android validation | Not yet recorded | OAuth, restart, offline/reconnect, cache, and logout/re-enrol |
 

@@ -344,7 +344,10 @@ class GDriveStreamingSettingsTab extends PluginSettingTab {
     const state = describeBrowserState(this.plugin.enrollmentState(), this.plugin.deviceFingerprint(), this.plugin.settings.allowedRootName || "unconfigured");
     const status = containerEl.createDiv({ cls: "gdrive-stream-settings-status" });
     status.createEl("p", { text: `Enrollment status: ${state.status === "enrolled" ? "Enrolled" : "Not enrolled"}` });
-    status.createEl("p", { text: `Device fingerprint: ${state.fingerprint}` });
+    status.createEl("p", { text: "Device enrollment fingerprint (copy the full 64-character value):" });
+    const fingerprintInput = status.createEl("input", { type: "text", value: state.fingerprint });
+    fingerprintInput.readOnly = true;
+    fingerprintInput.setAttribute("aria-label", "Device enrollment fingerprint");
     status.createEl("p", { text: state.reason });
 
     new Setting(containerEl)

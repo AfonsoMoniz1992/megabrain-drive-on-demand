@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createPublicKey } from "node:crypto";
+import { deviceSigningKeyFingerprint } from "../broker/src/enrollment-store";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import {
   LEASE_INFO,
@@ -82,13 +83,16 @@ describe("device identity", () => {
     }
   });
 
-  it("derives a stable device fingerprint that does not expose key material", () => {
+  it("derives the canonical broker-compatible SHA-256 fingerprint of the Ed25519 SPKI", () => {
     const identity = generateDeviceIdentity();
     const other = generateDeviceIdentity();
     const fingerprint = deviceFingerprint(identity);
+    const pem = exportEd25519SpkiPem(identity.ed25519PublicKey);
+    const brokerFingerprint = deviceSigningKeyFingerprint(pem);
+
     expect(fingerprint).toBe(deviceFingerprint(identity));
-    expect(fingerprint).toMatch(/^[0-9A-F]{4}(-[0-9A-F]{4}){3}$/);
+    expect(fingerprint).toMatch(/^[0-9a-f]{64}$/);
+    expect(fingerprint).toBe(brokerFingerprint);
     expect(fingerprint).not.toBe(deviceFingerprint(other));
-    expect(fingerprint.replace(/-/g, "").toLowerCase()).not.toContain(toBase64Url(identity.ed25519PublicKey).slice(0, 8).toLowerCase());
   });
 });

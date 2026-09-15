@@ -13,7 +13,7 @@ import {
 const ROOT_ID = "0BxGDriveStreamingDevRoot";
 const NOTE_ID = "note-1";
 const BIG_ID = "big-1";
-const FINGERPRINT = "ABCD-EF01-2345-6789";
+const FINGERPRINT = "9f2c4b6a1d8e0f3a5c7b9d1e2f4a6c8b0d2e4f6a8c1b3d5e7f9a0c2e4b6d8f1a";
 
 const notEnrolledState: EnrollmentView = { pairId: null, status: "not_enrolled", expiresAtMs: null };
 const enrolledState: EnrollmentView = { pairId: "b".repeat(64), status: "enrolled", expiresAtMs: 9_999_999 };

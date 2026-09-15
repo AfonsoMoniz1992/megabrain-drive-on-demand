@@ -227,9 +227,8 @@ export function sealLeaseEnvelope(
   return { v: 1, epk: toBase64Url(epk), salt: toBase64Url(salt), nonce: toBase64Url(nonce), ct: toBase64Url(ciphertext) };
 }
 
-/** Short human-readable fingerprint of the signing key, for the settings UI only. */
+/** Canonical SHA-256 fingerprint of the Ed25519 SPKI, identical to the broker's enrollment binding. */
 export function deviceFingerprint(identity: DeviceIdentity): string {
-  const digest = sha256(identity.ed25519PublicKey);
-  const hex = Array.from(digest.slice(0, 8), (byte) => byte.toString(16).padStart(2, "0")).join("").toUpperCase();
-  return hex.match(/.{4}/g)!.join("-");
+  const spkiDer = concatBytes(ED25519_SPKI_PREFIX, identity.ed25519PublicKey);
+  return Array.from(sha256(spkiDer), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }

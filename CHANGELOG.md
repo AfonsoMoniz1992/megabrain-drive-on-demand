@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.2 — canonical device enrollment fingerprint
+
+### Fixed
+
+- The settings screen previously displayed a short 16-hex-character label derived from the raw Ed25519 public key, while the broker correctly required the SHA-256 fingerprint of the Ed25519 SPKI DER (64 lowercase hex characters). Enrollment could therefore not be safely approved from the displayed value.
+- The plugin now derives the exact canonical broker-compatible fingerprint and displays it in a read-only copyable field. The enrollment code remains pre-bound to that full fingerprint.
+
 ## v0.2.1 — public self-hosted beta
 
 ### Changed

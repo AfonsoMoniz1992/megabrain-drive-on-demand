@@ -1,6 +1,6 @@
 # GDriveStreaming Drive on Demand
 
-> **Status: public self-hosted beta.** The v0.2.1 release distributes only plugin artefacts: it contains no broker, OAuth client, callback host, Google account or Drive data. Physical iOS/Android validation is still pending; use only an operator-owned broker and harmless test data.
+> **Status: public self-hosted beta.** The v0.2.2 release distributes only plugin artefacts: it contains no broker, OAuth client, callback host, Google account or Drive data. Physical iOS/Android validation is still pending; use only an operator-owned broker and harmless test data.
 
 GDriveStreaming Drive on Demand is a self-hosted, **read-only** Obsidian mobile plugin for browsing an existing Google Drive knowledge tree. It provides a plugin-owned remote browser, metadata search, and explicit on-demand materialisation of one selected file for iOS and Android. It does not turn remote Drive records into native Obsidian vault files.
 
@@ -48,8 +48,9 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) and [SECURITY.md](SECURITY.md) for the tr
 
 1. In Obsidian, install and enable [BRAT](https://github.com/TfTHacker/obsidian42-brat).
 2. In BRAT, choose **Add beta plugin** and enter this repository's `owner/repository` identifier.
-3. Choose **v0.2.1** and enable **GDriveStreaming Drive on Demand**.
-4. Configure **your own** HTTPS broker URL and the same harmless test-root name on broker and plugin before enrolling a device.
+3. Choose **v0.2.2** and enable **GDriveStreaming Drive on Demand**.
+4. Copy the full 64-character lowercase **Device enrollment fingerprint** shown by the plugin; this exact value is what the broker binds to the one-time code.
+5. Configure **your own** HTTPS broker URL and the same harmless test-root name on broker and plugin before enrolling a device.
 
 This release does not grant access to any shared Google account or service. A Google OAuth client in testing mode must be restricted to the operator's intended test users. Do not connect production data; see [STATUS.md](STATUS.md), [SECURITY_DECISION.md](SECURITY_DECISION.md), and [MOBILE_BETA_ACCEPTANCE.md](MOBILE_BETA_ACCEPTANCE.md).
 
