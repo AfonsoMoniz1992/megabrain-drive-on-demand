@@ -393,23 +393,28 @@ class GDriveStreamingSettingsTab extends PluginSettingTab {
           await this.plugin.updateAllowedRootName(value);
         }));
 
-    const codeInput = containerEl.createEl("input", { type: "text", placeholder: "One-time enrollment code" });
-    const enrollButton = containerEl.createEl("button", { text: "Enrol this device" });
-    enrollButton.onclick = () => {
-      const code = codeInput.value.trim();
-      if (!code) { new Notice("Enter the one-time enrollment code first."); return; }
-      enrollButton.setAttribute("disabled", "true");
-      void (async () => {
-        try {
-          await this.plugin.enrollDevice(code);
-          codeInput.value = "";
-          this.display();
-        } catch (error) {
-          new Notice(`Enrollment failed: ${error instanceof Error ? error.message : "unexpected error"}`);
-          enrollButton.removeAttribute("disabled");
-        }
-      })();
-    };
+    // The code field is offered only from a settled not-enrolled state: while a
+    // pairing is waiting for Google consent a second one-time code would be
+    // consumed for nothing.
+    if (state.status === "not_enrolled") {
+      const codeInput = containerEl.createEl("input", { type: "text", placeholder: "One-time enrollment code" });
+      const enrollButton = containerEl.createEl("button", { text: "Enrol this device" });
+      enrollButton.onclick = () => {
+        const code = codeInput.value.trim();
+        if (!code) { new Notice("Enter the one-time enrollment code first."); return; }
+        enrollButton.setAttribute("disabled", "true");
+        void (async () => {
+          try {
+            await this.plugin.enrollDevice(code);
+            codeInput.value = "";
+            this.display();
+          } catch (error) {
+            new Notice(`Enrollment failed: ${error instanceof Error ? error.message : "unexpected error"}`);
+            enrollButton.removeAttribute("disabled");
+          }
+        })();
+      };
+    }
 
     const openButton = containerEl.createEl("button", { text: "Open read-only Drive browser" });
     openButton.onclick = () => void this.plugin.activateBrowser();

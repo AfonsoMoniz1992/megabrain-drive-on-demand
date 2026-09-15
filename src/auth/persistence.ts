@@ -8,6 +8,8 @@
  * reach `saveData`. This module is the single allowlist that enforces that.
  */
 
+import type { EnrollmentStatus } from "./lease-manager";
+
 export const ALLOWED_PLUGIN_DATA_ROOT_KEYS = ["brokerBaseUrl", "allowedRootName", "enrollment", "driveRootId", "remoteFiles", "changesPageToken"] as const;
 export const ALLOWED_ENROLLMENT_KEYS = ["pairId", "status", "expiresAtMs"] as const;
 
@@ -117,7 +119,7 @@ export function buildPersistedPluginData(input: PersistedMobileState & { legacy?
  */
 export function toPersistedEnrollment(enrollment: {
   pairId: string | null;
-  status: string;
+  status: EnrollmentStatus;
   expiresAtMs: number | null;
 }): PersistedMobileState["enrollment"] {
   if (enrollment.status === "enrolled" && enrollment.pairId) {

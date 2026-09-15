@@ -7,6 +7,8 @@
 - Enrollment now has three truthful states: `Not enrolled`, `Waiting for Google consent` (a pairing exists but no lease has been issued yet) and `Enrolled`. Previously any non-null pairing was rendered as enrolled, so the plugin announced success before Google consent had been granted and then flipped back to not enrolled when the pairing window closed.
 - A pairing still waiting for consent is never persisted, so a restart cannot present an authorisation that was never granted.
 - The enrollment form is withheld while a pairing waits for consent, so a second one-time code cannot be consumed by accident.
+- A pairing that aborts before a lease is granted (rejected code, transport failure, foreign-root lease) is dropped instead of leaving the view stuck on `Waiting for Google consent`.
+- The settings screen offers the code field only from a settled not-enrolled state, matching the browser view.
 
 ### Added
 

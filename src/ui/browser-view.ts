@@ -178,7 +178,13 @@ export class GDriveStreamingBrowserView extends ItemView {
             }
             const downloaded = await this.host.download(file.id);
             new Notice(downloaded.message);
-            await this.openDownloaded(downloaded.path);
+            try {
+              await this.openDownloaded(downloaded.path);
+            } catch (error) {
+              // The bytes are already in the vault cache, so this is not a read
+              // failure and must not be reported as one.
+              new Notice(`Downloaded, but opening the note failed: ${messageOf(error)}`);
+            }
             action.removeAttribute("disabled");
           } catch (error) {
             new Notice(`Read failed: ${messageOf(error)} ${this.diagnostics()}`);
@@ -216,7 +222,9 @@ export class GDriveStreamingBrowserView extends ItemView {
   private async openDownloaded(path: string): Promise<void> {
     const file = this.app.vault.getAbstractFileByPath(path);
     if (file instanceof TFile) {
-      await this.app.workspace.getLeaf(false).openFile(file);
+      // "tab" keeps the read-only browser view in place; reusing the most recent
+      // leaf would replace the very view the operator clicked in.
+      await this.app.workspace.getLeaf("tab").openFile(file);
       return;
     }
     new Notice(`Downloaded to ${path}. Open it from the file explorer to read it.`);

@@ -154,12 +154,15 @@ export class LeaseManager {
     this.consentPending = true;
     this.pairExpiresAtMs = pair.expiresAtMs;
     this.emit(pair.expiresAtMs);
-    await this.openAuthorizationUrl(pair.authorizationUrl);
-    const claim = await this.claimUntilAuthorized(pair.pairId, pair.proofMessage, pair.expiresAtMs);
     try {
+      await this.openAuthorizationUrl(pair.authorizationUrl);
+      const claim = await this.claimUntilAuthorized(pair.pairId, pair.proofMessage, pair.expiresAtMs);
       return this.applyLease(claim);
     } catch (error) {
-      // A lease for a foreign root is never usable; drop the pairing entirely.
+      // Nothing that aborts before a lease is applied may leave the pairing
+      // behind: a rejected code, a transport abort or a lease for a foreign root
+      // would otherwise strand the view on "Waiting for Google consent" behind a
+      // pairing that can no longer complete.
       this.clear();
       throw error;
     }

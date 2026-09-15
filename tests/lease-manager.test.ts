@@ -251,6 +251,27 @@ describe("lease manager", () => {
     expect(h.manager.enrollment).toEqual({ pairId: null, status: "not_enrolled", expiresAtMs: null });
   });
 
+  it("drops the pending pairing when the consent poll aborts with a transport failure", async () => {
+    const identity = generateDeviceIdentity();
+    const manager = new LeaseManager({
+      broker: new BrokerClient({ baseUrl: BASE_URL, request: async (request) => {
+        if (request.url.endsWith("/oauth/pair")) {
+          return { status: 201, json: { pairId: "e".repeat(64), oauthState: "s", proofMessage: PROOF_MESSAGE, expiresAtMs: 1_600_000, authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth" } };
+        }
+        throw new Error("network down");
+      } }),
+      identity,
+      openAuthorizationUrl: () => undefined,
+      now: () => 1_000_000,
+      sleep: async () => undefined
+    });
+
+    await expect(manager.enroll(ENROLLMENT_CODE)).rejects.toThrow();
+    // A stuck awaiting_consent state would strand the view behind a pairing that
+    // can no longer complete.
+    expect(manager.enrollment).toEqual({ pairId: null, status: "not_enrolled", expiresAtMs: null });
+  });
+
   it("treats a persisted pairing as authorised across a restart, without a lease", () => {
     const identity = generateDeviceIdentity();
     const h = harness({ identity, initialPairId: "b".repeat(64) });
