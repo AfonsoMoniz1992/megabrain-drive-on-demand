@@ -1,10 +1,19 @@
 # Changelog
 
+## v0.2.4 — preserve mobile enrollment on no-op settings events
+
+### Fixed
+
+- Ignore mobile settings callbacks whose broker URL or allowed root is semantically unchanged after validation and normalization. Such callbacks no longer rebuild the client or clear the persisted non-secret `pairId` when an operator returns to Settings.
+- Preserve the fail-closed boundary for genuine configuration changes: changing the effective broker URL or allowed Drive root still clears the pairing and requires a new device enrollment.
+
 ## v0.2.3 — durable mobile enrollment state
 
 ### Fixed
 
 - Serialize all plugin `data.json` writes and discard queued stale snapshots. Mobile settings changes can complete asynchronously; an older write no longer overwrites the `pairId` saved after a successful enro...[truncated]
+
+## v0.2.2 — canonical device enrollment fingerprint
 
 ### Fixed
 

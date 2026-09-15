@@ -94,6 +94,16 @@ export function normalizeBrokerBaseUrl(value: string): string {
   }
 }
 
+/** A semantic broker change must invalidate the device-bound pairing. */
+export function brokerChangeInvalidatesEnrollment(current: string, nextInput: string): boolean {
+  return normalizeBrokerBaseUrl(current) !== normalizeBrokerBaseUrl(nextInput);
+}
+
+/** A semantic allowed-root change must invalidate the device-bound pairing. */
+export function rootChangeInvalidatesEnrollment(current: string, nextInput: string): boolean {
+  return normalizeAllowedRootName(current) !== normalizeAllowedRootName(nextInput);
+}
+
 /**
  * Projects settings onto the persistable subset. Throws for a malformed broker
  * URL rather than silently persisting an unusable destination, and never emits

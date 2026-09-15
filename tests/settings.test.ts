@@ -4,7 +4,10 @@ import {
   DEFAULT_SETTINGS,
   PERSISTED_SETTING_KEYS,
   brokerBaseUrlForRuntime,
+  brokerChangeInvalidatesEnrollment,
+  normalizeAllowedRootName,
   normalizeBrokerBaseUrl,
+  rootChangeInvalidatesEnrollment,
   toPersistedSettings
 } from "../src/settings";
 import { ALLOWED_PLUGIN_DATA_ROOT_KEYS, findForbiddenPersistence } from "../src/auth/persistence";
@@ -44,5 +47,18 @@ describe("mobile beta settings", () => {
     expect(normalizeBrokerBaseUrl("http://evil.example/gdrive-stream-oauth")).toBe("");
     expect(normalizeBrokerBaseUrl("")).toBe("");
     expect(normalizeBrokerBaseUrl("https://broker.example.test/gdrive-stream-api")).toBe("https://broker.example.test/gdrive-stream-api");
+  });
+
+  it("does not invalidate enrollment for a delayed no-op mobile field event", () => {
+    const broker = "https://broker.example.test/gdrive-stream-api";
+    const root = "operator-test-root";
+    expect(brokerChangeInvalidatesEnrollment(broker, broker)).toBe(false);
+    expect(rootChangeInvalidatesEnrollment(root, `  ${root}  `)).toBe(false);
+    expect(normalizeAllowedRootName(`  ${root}  `)).toBe(root);
+  });
+
+  it("invalidates enrollment when the effective broker or root changes", () => {
+    expect(brokerChangeInvalidatesEnrollment("https://broker.example.test/one", "https://broker.example.test/two")).toBe(true);
+    expect(rootChangeInvalidatesEnrollment("operator-test-root", "a-different-test-root")).toBe(true);
   });
 });

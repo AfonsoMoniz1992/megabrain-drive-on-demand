@@ -21,8 +21,10 @@ import {
   DEFAULT_SETTINGS,
   allowedRootNameForRuntime,
   brokerBaseUrlForRuntime,
+  brokerChangeInvalidatesEnrollment,
   normalizeAllowedRootName,
   normalizeBrokerBaseUrl,
+  rootChangeInvalidatesEnrollment,
   toPersistedSettings,
   type GDriveStreamingSettings
 } from "./settings";
@@ -119,6 +121,7 @@ export default class GDriveStreamingDrivePlugin extends Plugin {
    * newly configured origin; enrollment must begin again at that origin.
    */
   async updateBrokerBaseUrl(value: string): Promise<void> {
+    if (!brokerChangeInvalidatesEnrollment(this.settings.brokerBaseUrl, value)) return;
     this.settings.brokerBaseUrl = normalizeBrokerBaseUrl(value);
     this.persistedPairId = null;
     this.currentAccessToken = "";
@@ -133,6 +136,7 @@ export default class GDriveStreamingDrivePlugin extends Plugin {
    * root, so changing it invalidates the current pairing.
    */
   async updateAllowedRootName(value: string): Promise<void> {
+    if (!rootChangeInvalidatesEnrollment(this.settings.allowedRootName, value)) return;
     this.settings.allowedRootName = normalizeAllowedRootName(value);
     this.persistedPairId = null;
     this.currentAccessToken = "";
