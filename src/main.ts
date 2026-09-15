@@ -26,6 +26,7 @@ import {
   toPersistedSettings,
   type GDriveStreamingSettings
 } from "./settings";
+import { LatestWriteQueue } from "./settings-write-queue";
 import { BrowserController, describeBrowserState } from "./ui/browser-state";
 import { GDRIVE_STREAM_BROWSER_VIEW_TYPE, GDriveStreamingBrowserView, type GDriveStreamingBrowserHost } from "./ui/browser-view";
 
@@ -47,6 +48,7 @@ export default class GDriveStreamingDrivePlugin extends Plugin {
   private controller!: BrowserController;
   private currentAccessToken = "";
   private persistedPairId: string | null = null;
+  private readonly settingsWrites = new LatestWriteQueue();
   private logoutInProgress = false;
 
   async onload(): Promise<void> {
@@ -108,7 +110,7 @@ export default class GDriveStreamingDrivePlugin extends Plugin {
         changesPageToken: typeof persisted.changesPageToken === "string" ? persisted.changesPageToken : undefined
       }
     });
-    await this.saveData(data);
+    await this.settingsWrites.enqueue(() => this.saveData(data));
   }
 
   /**
@@ -197,7 +199,7 @@ export default class GDriveStreamingDrivePlugin extends Plugin {
         persistClearedEnrollment: async () => {
           this.persistedPairId = null;
           const persisted = toPersistedSettings({ ...this.settings, remoteFiles: this.settings.remoteFiles });
-          await this.saveData(buildPersistedPluginData({
+          const clearedData = buildPersistedPluginData({
             brokerBaseUrl: String(persisted.brokerBaseUrl),
             allowedRootName: String(persisted.allowedRootName ?? ""),
             enrollment: { pairId: null, status: "not_enrolled", expiresAtMs: null },
@@ -206,7 +208,8 @@ export default class GDriveStreamingDrivePlugin extends Plugin {
               remoteFiles: Array.isArray(persisted.remoteFiles) ? (persisted.remoteFiles as RemoteFile[]) : [],
               changesPageToken: typeof persisted.changesPageToken === "string" ? persisted.changesPageToken : undefined
             }
-          }));
+          });
+          await this.settingsWrites.enqueue(() => this.saveData(clearedData));
         },
         clearCurrentAccessToken: () => { this.currentAccessToken = ""; }
       });

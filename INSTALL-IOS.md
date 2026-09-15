@@ -8,7 +8,7 @@ Use only a disposable local vault, an operator-owned broker, and harmless test d
 
 1. Install Obsidian from the App Store and open a dedicated test vault.
 2. Install and enable [BRAT](https://github.com/TfTHacker/obsidian42-brat).
-3. In BRAT choose **Add beta plugin**, enter this repository's `owner/repository` identifier, then select **v0.2.2**.
+3. In BRAT choose **Add beta plugin**, enter this repository's `owner/repository` identifier, then select **v0.2.3**.
 4. Enable **GDriveStreaming Drive on Demand**.
 5. Copy the full 64-character lowercase **Device enrollment fingerprint** shown in settings. The broker binds the one-time code to this exact value.
 6. Configure your own HTTPS broker URL and **Allowed Drive test root**. The root name must match the one configured in your broker's `GDRIVE_STREAM_ALLOWED_ROOT_NAME`.

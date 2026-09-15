@@ -1,6 +1,10 @@
 # Changelog
 
-## v0.2.2 — canonical device enrollment fingerprint
+## v0.2.3 — durable mobile enrollment state
+
+### Fixed
+
+- Serialize all plugin `data.json` writes and discard queued stale snapshots. Mobile settings changes can complete asynchronously; an older write no longer overwrites the `pairId` saved after a successful enro...[truncated]
 
 ### Fixed
 
