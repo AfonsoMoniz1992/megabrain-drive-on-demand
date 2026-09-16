@@ -218,56 +218,64 @@ cache no-overwrite, and no create/rename/move/trash/delete request anywhere.
 ## 8. Identity scan before every public push, tag or release
 
 ```bash
-IDENTITY_DENYLIST=/secure/path/identity-denylist.txt python3 scripts/identity_scan.py .
+IDENTITY_DENYLIST=/secure/path/identity-denylist.txt \
+EXPECTED_IDENTITY_EMAIL=<your-account>@users.noreply.github.com \
+python3 scripts/identity_scan.py .
 # identity_scan=PASS_WITH_DECLARED_EXCEPTIONS
-bash scripts/identity-scan-selftest.sh          # 18 adversarial scenarios
+
+bash scripts/identity-scan-selftest.sh          # 22 adversarial scenarios
 # identity_scan_selftest=PASS
 ```
 
-**Verdicts and exit status.** `PASS` (nothing found, nothing declared, nothing
-used) and `PASS_WITH_DECLARED_EXCEPTIONS` exit 0; `FAIL` exits 1; a configuration
-error exits 2. The verdict is never a plain `PASS` while a declared exception is
-in play, so a green run cannot hide one.
+**Verdicts and exit status.** `PASS` and `PASS_WITH_DECLARED_EXCEPTIONS` exit 0;
+`FAIL` exits 1; a configuration error exits 2. The verdict is never a plain
+`PASS` while a declared exception is in play.
 
-**A deny-list is required and must be usable.** It lives outside the tree (a
-committed deny-list leaks what it lists) and must contain at least one valid
-regex; empty, comment-only or invalid deny-lists are configuration errors, not
-passes. `IDENTITY_ALLOW_NO_DENYLIST=1` allows a smoke run that reports itself as
-non-authoritative — that is what CI runs, because CI has no operator deny-list.
+**Two settings are required for an authoritative run.** `IDENTITY_DENYLIST`
+points to a file outside the tree (a committed deny-list leaks what it lists) with
+at least one valid regex: empty, comment-only or invalid deny-lists are
+configuration errors. `EXPECTED_IDENTITY_EMAIL` names the account the Git
+identity is allowed to belong to — without it the gate refuses, because an
+address-shape rule such as "anything at users.noreply.github.com" does not
+enforce a concrete account. `IDENTITY_ALLOW_NO_DENYLIST=1` permits a smoke run
+that reports itself as non-authoritative; that is what CI runs.
 
-**Five surfaces.** Working-tree contents **and file names**, every reachable
-blob and path, every commit and tag message, the Git identity metadata, and the
-release artefacts.
+**Five surfaces.** Working-tree contents **and file names**; every reachable
+object in history, with its path; every commit and tag message; the Git identity
+metadata; the release artefacts.
 
-**How matching works** (the reason it is not a shell script): every candidate
-text is matched against every pattern with full spans, and each match is
-classified by whether its *whole* span is covered by a declared exemption —
-fully covered is `EXEMPT`, partially covered is a hit, uncovered is a hit.
-Nothing is truncated before analysis. That closes truncation, ordering,
-partial-overlap and regex-delimiter bypasses at once.
+**How matching works.** Every candidate text is matched against every pattern
+with full spans, and a match is exempt only when its **whole** span is covered by
+a declared exemption — partial cover is a hit. History is read as objects through
+`git cat-file --batch` and matched in Python: there is **no `git grep -E`
+pre-filter**, because a pattern that is valid for the matcher may be invalid or
+differently interpreted as a POSIX extended regex (the self-test covers exactly
+that case). Nothing is truncated before analysis.
 
 **Declared exemptions** (`scripts/identity-exemptions.txt`, `regex ::
-justification`) are printed as `EXEMPT ... <= <why>`; a line without a
-justification fails the run. They never silence the identity metadata: a match
-there is reported as `KNOWN-IDENTITY-EXCEPTION`, counted, and forces the verdict
-to `PASS_WITH_DECLARED_EXCEPTIONS`.
+justification`) print as `EXEMPT ... <= <why>`; a line without a justification
+fails the run. They never silence the identity metadata: a match there is
+reported as `KNOWN-IDENTITY-EXCEPTION`, counted, and forces
+`PASS_WITH_DECLARED_EXCEPTIONS`.
 
-**Not scanned, by scope decision:** `.git` and `node_modules` (neither is
-distributed, and content that reaches a release is caught by the artefact
-surface). No file inside the tree is excluded by path: a forbidden identifier
-planted in any file, any file name or any historical blob is reported.
+**Declared scope exclusions:** `.git` and `node_modules`. Neither is distributed,
+and content that reaches a release is caught by the artefact surface — the
+self-test asserts both halves (an identifier inside `node_modules` is not
+scanned, and the same content published as `main.js` is). No other path inside
+the tree is excluded.
 
 **Strict mode** `IDENTITY_REQUIRE_NO_EXEMPTIONS=1` fails when an exemption is
-used, when one is declared, or when a known identity exception exists, and prints
-each reason. For this repository it fails in every configuration, which is the
-honest measure of the declared owner-account exception.
+used, when one is declared, or when a known identity exception exists, printing
+each reason. For this repository it fails in every configuration.
 
-**The gate is itself tested:** 18 scenarios, each checking the **exit status**
+**The gate is itself tested:** 22 scenarios, each asserting the **exit status**
 and the expected output, because a gate that prints FAIL and returns success is
-exactly the failure a text-only test misses. Scenarios cover missing, empty,
-comment-only and invalid deny-lists; identifiers planted in another file, in a
-file name, and under the tool's own basename elsewhere; co-location and partial
-overlap with an exempted value; a forbidden value 400 characters into a line; an
-exemption pattern containing a path separator; a leak present in history but
-removed from the tree; identity metadata outside the policy; metadata matching a
-declared exemption; and the smoke-mode flag.
+exactly what a text-only test misses. They cover: missing, empty, comment-only
+and invalid deny-lists; a missing declared account; identifiers planted in
+another file, in a file name, and under the tool's own basename elsewhere;
+co-location and partial overlap with an exempted value; a forbidden value 400
+characters into a line; a deny-list pattern valid for the matcher but invalid as
+a POSIX ERE (in the tree and in history); an exemption pattern containing a path
+separator; identity metadata outside the policy; an allowlist-shaped address that
+belongs to another account; metadata matching a declared exemption; the
+`node_modules` exclusion and the artefact catch; and smoke-mode flagging.

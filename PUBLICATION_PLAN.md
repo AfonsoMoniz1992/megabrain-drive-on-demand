@@ -30,36 +30,37 @@ Two different things were cleaned, and they carry different evidence:
 The exact claim, so that it can be checked or refuted:
 
 - **enforced:** zero hits for the operator's out-of-tree deny-list and for the
-  built-in patterns (tailnet domains, private addresses, consumer mailboxes,
-  Google OAuth client ids, Drive links, service accounts) across working-tree
-  contents and file names, the whole reachable history and its paths, commit and
-  tag messages, the Git identity fields and the release artefacts. An
-  authoritative run requires that deny-list: without one the gate reports a
-  configuration error instead of a pass.
+  built-in patterns across working-tree contents and file names, every reachable
+  object in history and its path, commit and tag messages, the Git identity
+  fields and the release artefacts. History is read as objects and matched in
+  Python with the same engine as every other surface — there is no POSIX-ERE
+  pre-filter that a valid pattern could fail to survive. An authoritative run
+  requires both the deny-list and the declared distributing account
+  (`EXPECTED_IDENTITY_EMAIL`); without either, the gate reports a configuration
+  error rather than a pass.
 - **declared exception:** the public account that distributes the plugin. A
   repository published under one cannot claim to carry no owner identity: the
   installation instructions must name the slug a user types into BRAT, and the
   Git identity uses that account's noreply address so commits stay attributed.
-  The exception is listed with a justification in `scripts/identity-exemptions.txt`;
-  every masked hit is printed with that justification, and a match in the Git
-  identity metadata is reported as a known exception rather than silenced. The
-  verdict for this repository is therefore `PASS_WITH_DECLARED_EXCEPTIONS`, never
-  a plain `PASS`.
+  The exception is listed with a justification in
+  `scripts/identity-exemptions.txt`; every masked hit prints with that
+  justification, and a match in the Git identity metadata is reported as a known
+  exception rather than silenced. The verdict for this repository is
+  `PASS_WITH_DECLARED_EXCEPTIONS`, never a plain `PASS`.
 - **not claimed:** that the repository carries no owner identity anywhere, and
   that the gate proves absence rather than detecting what its patterns describe.
   `IDENTITY_REQUIRE_NO_EXEMPTIONS=1` fails in every configuration for this
-  repository and prints every reason; that failure is the honest measure of the
-  difference, and it disappears if you publish from a project-owned account and
-  declare nothing.
-- **scope decisions, not gate properties:** `.git` and `node_modules` are not
-  scanned (neither is distributed; content that reaches a release is caught by the
-  artefact surface), and the authoritative run is a manual step with an operator
-  deny-list — CI runs the gate self-test and a non-authoritative built-in-pattern
-  scan on every push.
+  repository and prints every reason.
+- **declared scope exclusions, not gate properties:** `.git` and `node_modules`
+  are not scanned (neither is distributed; content that reaches a release is
+  caught by the artefact surface, and the self-test asserts both halves). The
+  authoritative run is a manual step with an operator deny-list; CI runs the gate
+  self-test and a non-authoritative built-in-pattern scan on every push.
 
 The gate's behaviour is tested rather than asserted: `scripts/identity-scan-selftest.sh`
-runs 18 adversarial scenarios against a disposable fixture, each checking the exit
-status and the expected output, including identifiers planted only in a file name,
-co-located or partially overlapping with an exempted value, and a leak present in
-history but removed from the tree.
+runs 22 adversarial scenarios against a disposable fixture, each checking the exit
+status and the expected output — including a deny-list pattern that is valid for
+the matcher but invalid as a POSIX extended regex, an identifier planted only in a
+file name, co-location and partial overlap with an exempted value, and a leak
+present in history but removed from the tree.
 

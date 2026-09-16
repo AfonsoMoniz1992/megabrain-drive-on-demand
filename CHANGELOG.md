@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.0.6 — sixth-review fixes (no POSIX-ERE dependency and an enforced account)
+
+### Fixed
+
+- **History was pre-filtered with `git grep -E`.** A deny-list pattern valid for the matching engine but invalid or differently interpreted as a POSIX extended regex could fail that pre-filter, so a historical identifier could pass. History is now read as objects through one `git cat-file --batch` pass and matched in Python, the same engine as every other surface. The self-test covers that exact case, in the tree and in history.
+- **The identity policy did not enforce a concrete account.** The address rule accepted any `@users.noreply.github.com` address, so the documentation's claim that the gate enforces the distributing account was not true. `EXPECTED_IDENTITY_EMAIL` now names that account and is required for an authoritative run; an allowlist-shaped address belonging to someone else is a hit.
+- **The "no path exclusions" claim was wrong.** `.git` and `node_modules` are excluded from the working tree. The exclusion is now stated as a declared scope decision with its reasoning, and the self-test asserts both halves: content inside `node_modules` is not scanned, while the same content published as `main.js` is caught by the artefact surface.
+
+### Changed
+
+- `docs/RUNBOOK.md` section 8 and `PUBLICATION_PLAN.md` rewritten again so each claim matches what the gate proves: no ERE pre-filter, a required declared account, and the two declared scope exclusions named explicitly.
+
 ## v1.0.5 — fifth-review fixes (the gate is rewritten, not patched)
 
 The scan was rewritten from shell to Python because five of the defects found in

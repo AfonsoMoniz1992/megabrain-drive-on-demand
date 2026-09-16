@@ -115,6 +115,61 @@ def run_git(repo: Path, *args: str) -> str:
     return result.stdout if result.returncode == 0 else ""
 
 
+def git_objects(repo: Path) -> tuple[list[str], dict[str, str]]:
+    """Reachable object ids in traversal order, with the first path seen for each."""
+    order: list[str] = []
+    paths: dict[str, str] = {}
+    for line in run_git(repo, "rev-list", "--objects", "--all").splitlines():
+        sha, _, path = line.partition(" ")
+        if not sha:
+            continue
+        if sha not in paths:
+            order.append(sha)
+            paths[sha] = path
+    return order, paths
+
+
+def batch_objects(repo: Path, shas: list[str]) -> list[tuple[str, str, bytes]]:
+    """Read objects in one `git cat-file --batch` pass: (sha, type, payload).
+
+    Content is read as bytes and decoded here rather than pre-filtered by
+    `git grep -E`, because a pattern that is valid for the matching engine may be
+    invalid — or behave differently — as a POSIX extended regex. Filtering in
+    Python keeps one matching semantics for every surface.
+    """
+    if not shas:
+        return []
+    proc = subprocess.run(
+        ["git", "-C", str(repo), "cat-file", "--batch"],
+        input="\n".join(shas).encode(),
+        capture_output=True,
+    )
+    data = proc.stdout
+    objects: list[tuple[str, str, bytes]] = []
+    position = 0
+    while position < len(data):
+        header_end = data.find(b"\n", position)
+        if header_end == -1:
+            break
+        header = data[position:header_end].decode("utf-8", "replace").split()
+        position = header_end + 1
+        if len(header) != 3:
+            # "<sha> missing" or a truncated entry: stop rather than misparse.
+            break
+        sha, kind, size = header[0], header[1], int(header[2])
+        payload = data[position:position + size]
+        position += size + 1     # object payload is followed by a newline
+        objects.append((sha, kind, payload))
+    return objects
+
+
+def object_message(payload: bytes) -> str:
+    """The message part of a commit or annotated tag object."""
+    text = payload.decode("utf-8", "replace")
+    _, separator, message = text.partition("\n\n")
+    return message if separator else ""
+
+
 def load_denylist(patterns: list[re.Pattern], report: Report) -> bool:
     """Returns True when the run is authoritative."""
     path = os.environ.get("IDENTITY_DENYLIST", "").strip()
@@ -243,37 +298,46 @@ def scan_tree(repo: Path, patterns: list[re.Pattern], exemptions: list[Exemption
 
 
 def scan_history(repo: Path, patterns: list[re.Pattern], exemptions: list[Exemption], report: Report) -> None:
-    commits = run_git(repo, "rev-list", "--all").split()
-    for commit in commits:
-        short = commit[:12]
-        for path in run_git(repo, "ls-tree", "-r", "--name-only", commit).splitlines():
-            classify(path, patterns, exemptions, f"HIT history-path {short} {path}", report)
-        grep = subprocess.run(
-            ["git", "-C", str(repo), "grep", "-nIE", "|".join(p.pattern for p in patterns), commit],
-            capture_output=True,
-            text=True,
-            errors="replace",
-        )
-        for line in grep.stdout.splitlines():
-            path, _, remainder = line.partition(":")      # <path>:<line>:<content>
-            lineno, _, content = remainder.partition(":")
-            classify(content, patterns, exemptions, f"HIT blob {short} {path}:{lineno}", report)
-    for message_line in run_git(repo, "log", "--all", "--format=%H%n%B").splitlines():
-        classify(message_line, patterns, exemptions, "HIT commit message", report)
-    tag_names = run_git(repo, "for-each-ref", "--format=%(objecttype) %(objectname)", "refs/tags").splitlines()
-    for entry in tag_names:
-        parts = entry.split()
-        if len(parts) != 2 or parts[0] != "tag":
-            continue
-        body = run_git(repo, "cat-file", "-p", parts[1])
-        message = body.split("\n\n", 1)[1] if "\n\n" in body else ""
-        for line in message.splitlines():
-            classify(line, patterns, exemptions, f"HIT tag message {parts[1][:12]}", report)
+    """History: paths, blob contents, commit messages and tag messages.
+
+    Every reachable object is streamed through one `git cat-file --batch` pass and
+    matched in Python. There is no `git grep -E` pre-filter, so a deny-list
+    pattern that is valid for the matcher can never silently fail to match here.
+    """
+    order, paths = git_objects(repo)
+    for sha in order:
+        path = paths.get(sha, "")
+        if path:
+            classify(path, patterns, exemptions, f"HIT history-path {sha[:12]} {path}", report)
+    for sha, kind, payload in batch_objects(repo, order):
+        short = sha[:12]
+        path = paths.get(sha, "")
+        if kind == "blob":
+            for number, line in enumerate(payload.decode("utf-8", "replace").splitlines(), start=1):
+                classify(line, patterns, exemptions, f"HIT blob {short} {path}:{number}", report)
+        elif kind == "commit":
+            for line in object_message(payload).splitlines():
+                classify(line, patterns, exemptions, f"HIT commit message {short}", report)
+        elif kind == "tag":
+            for line in object_message(payload).splitlines():
+                classify(line, patterns, exemptions, f"HIT tag message {short}", report)
 
 
-def scan_identity(repo: Path, patterns: list[re.Pattern], exemptions: list[Exemption], report: Report) -> None:
+def scan_identity(
+    repo: Path,
+    patterns: list[re.Pattern],
+    exemptions: list[Exemption],
+    report: Report,
+    authoritative: bool,
+) -> None:
     expected_name = os.environ.get("EXPECTED_IDENTITY_NAME", "obsidian-gdrive-streaming")
+    expected_email = os.environ.get("EXPECTED_IDENTITY_EMAIL", "").strip()
     allowed_email = re.compile(os.environ.get("ALLOWED_IDENTITY_EMAIL_RE", r"@users\.noreply\.github\.com$"))
+    if authoritative and not expected_email:
+        report.configuration_errors.append(
+            "no EXPECTED_IDENTITY_EMAIL: an authoritative run must name the account the identity "
+            "may belong to, because the address-shape allowlist alone does not enforce one"
+        )
 
     names: set[str] = set()
     emails: set[str] = set()
@@ -293,9 +357,17 @@ def scan_identity(repo: Path, patterns: list[re.Pattern], exemptions: list[Exemp
             report.enforced.append(f"HIT identity name: {name[:DISPLAY_LIMIT]} (expected {expected_name})")
         classify(name, patterns, exemptions, "HIT identity field", report, identity=True)
     for email in sorted(filter(None, emails)):
-        if not allowed_email.search(email):
+        if expected_email:
+            if email.lower() != expected_email.lower():
+                report.enforced.append(
+                    f"HIT identity address: {email[:DISPLAY_LIMIT]} (not the declared distributing account)"
+                )
+        elif not allowed_email.search(email):
             report.enforced.append(f"HIT identity address: {email[:DISPLAY_LIMIT]} (outside the allowed pattern)")
         classify(email, patterns, exemptions, "HIT identity field", report, identity=True)
+    report.notes.append(
+        "identity_email_policy=" + ("exact:" + expected_email if expected_email else "address-shape allowlist (weaker)")
+    )
     report.notes.append(f"distinct_identity_names={len(set(filter(None, names)))}")
     report.notes.append(f"distinct_identity_addresses={len(set(filter(None, emails)))}")
 
@@ -337,7 +409,7 @@ def main() -> int:
         print("== 2. reachable history (blobs, paths, commit and tag messages) ==")
         scan_history(repo, patterns, exemptions, report)
         print("== 3. identity metadata (author, committer, tagger) ==")
-        scan_identity(repo, patterns, exemptions, report)
+        scan_identity(repo, patterns, exemptions, report, authoritative)
         print("== 4. release artefacts on disk ==")
         scan_artefacts(repo, patterns, exemptions, report)
 
