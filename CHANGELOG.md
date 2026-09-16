@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.0.3 — third-review fixes (gate hardening and exact claims)
+
+### Fixed
+
+- `scripts/identity-scan.sh` now scans at line level, so an exemption is judged against the offending line instead of the file name — the previous design could not silence anything.
+- The deny-list is applied to the Git identity fields (author, committer, tagger) and not only to file contents.
+- The self-exclusion is now an exact path (`scripts/identity-scan.sh`) plus the exemptions file; the previous basename-wide exclusion is gone, and a planted file at another path is detected (regression test in the runbook).
+- An exemption line without a justification now fails the gate.
+- Runbook secret generation uses `openssl rand -hex 32` instead of `xxd`, which is not present on every distribution, and the prerequisites are declared.
+- Runbook Tailscale explanation replaced with what the CLI actually answers on 1.102.x for the legacy forms (`the CLI for serve and funnel has changed`, `invalid argument format`, and `off` still parsed).
+
+### Added
+
+- `scripts/identity-exemptions.txt`: the declared public exception (the distributing account), each entry with a justification, printed by every gate run as `EXEMPT ... <= why`.
+- `IDENTITY_REQUIRE_NO_EXEMPTIONS=1` strict mode, which fails on any exemption and reports exactly what carries the difference.
+
+### Changed
+
+- `PUBLICATION_PLAN.md` states the claim in three parts — what is enforced, the one declared exception, and what is explicitly **not** claimed — instead of asserting a generic identity for everything.
+
 ## v1.0.2 — second-review fixes (identity metadata and runbook execution paths)
 
 ### Fixed

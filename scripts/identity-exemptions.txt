@@ -1,0 +1,16 @@
+# Declared exemptions for scripts/identity-scan.sh.
+#
+# Format: <regex> :: <justification>
+#
+# An entry is honoured only when it carries a justification, and every hit it
+# silences is printed as EXEMPT with that justification, so nothing disappears
+# quietly. Delete an entry the moment it stops being true.
+#
+# Nothing here is a secret. Each entry names an identifier that is already
+# public in this repository by design: the account that distributes the plugin.
+# The enforced rule is zero operator-infrastructure identifiers; the owner
+# account is the one declared exception, and `IDENTITY_REQUIRE_NO_EXEMPTIONS=1`
+# turns the gate strict for auditors who want to see that difference fail.
+
+AfonsoMoniz1992 :: public repository owner account, display form. The installation instructions must name the slug that hosts the published release, because that is what a user types into BRAT; the repository URL is public by construction.
+afonsomoniz1992 :: public repository owner account, address form. The Git identity uses this account's GitHub noreply address so published commits stay attributed to it; a neutral address would remove the identifier but also the attribution.

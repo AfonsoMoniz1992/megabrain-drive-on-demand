@@ -22,11 +22,28 @@ Two different things were cleaned, and they carry different evidence:
   whole reachable history and the release artefacts, and the approval criteria in
   `docs/RUNBOOK.md` section 8 must pass before publishing.
 - **Git identity metadata.** Authors, committers and taggers carry the declared
-  project policy identity — the name `obsidian-gdrive-streaming` and a GitHub
-  noreply address — not a personal or operator identity. This is a declared,
-  enforced policy (the scan fails on any other name or address pattern), not a
-  claim that the history is anonymous: the repository owner's account is public
-  by construction, and attribution is preserved deliberately.
+  project policy identity: the name `obsidian-gdrive-streaming` and the
+  distributing account's GitHub noreply address. This is enforced by the gate,
+  not merely asserted.
+
+The exact claim, so that it can be checked or refuted:
+
+- **enforced:** zero operator-infrastructure identifiers — hostnames, tailnet
+  domains, private addresses, cloud project and client ids, Drive ids, secret
+  labels, account mailboxes — across the tree, the whole reachable history, the
+  commit and tag messages and the Git identity fields;
+- **declared exception:** the public account that distributes the plugin. The
+  installation instructions must name the slug a user types into BRAT, and the
+  Git identity uses that account's noreply address so commits stay attributed.
+  The exception is listed with a justification in
+  `scripts/identity-exemptions.txt`, and every gate run prints each hit it
+  silences together with that justification;
+- **not claimed:** that the repository carries no owner identity anywhere. A
+  repository published under a personal account cannot claim that without moving
+  to a project-owned account. `IDENTITY_REQUIRE_NO_EXEMPTIONS=1` runs the gate in
+  strict mode and fails on the declared exception: that failure is the honest
+  measure of the difference, and it disappears if you publish from a
+  project-owned account.
 
 Residual risk, stated so it is not overread:
 

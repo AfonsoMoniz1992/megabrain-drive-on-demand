@@ -8,6 +8,9 @@ project ID, client ID, secret or Drive identifier.
 
 - A host you control with systemd and AppArmor in enforcing mode.
 - **Node.js 22** (the version CI builds and tests with): `node --version`.
+- `openssl`, `grep`, `git` and `curl` on the host. No Python or `jq` is needed;
+  secret generation below uses `openssl` rather than `xxd`, which is not present
+  on every distribution.
 - Your own Google Cloud project, OAuth client and Drive test folder
   ([GOOGLE_CLOUD_SETUP.md](../GOOGLE_CLOUD_SETUP.md)).
 - A way to publish one HTTPS path to the internet and one path to your private
@@ -33,7 +36,7 @@ sudo install -d -m 0700 -o gdrive-stream-broker -g gdrive-stream-broker /var/lib
 
 umask 077
 head -c 32 /dev/urandom | base64 > /tmp/token-key          # exactly 32 bytes, base64
-head -c 32 /dev/urandom | xxd -p -c 64 > /tmp/admin-token  # at least 16 characters
+openssl rand -hex 32 > /tmp/admin-token                   # 64 hex characters (>= 16)
 printf '%s' '<client-secret-copied-from-google>' > /tmp/oauth-client-secret
 
 sudo install -m 0440 -o root -g gdrive-stream-broker /tmp/token-key           /etc/gdrive-stream-broker/secrets/token-key
@@ -111,9 +114,11 @@ sudo tailscale serve  --bg --https=8445 --set-path=/gdrive-stream-api http://127
 sudo tailscale serve status      # confirm both mounts, then `tailscale funnel status`
 ```
 
-On Tailscale 1.102.x the target is the local URL and there is no trailing
-`on`/`off` toggle — that older form now fails with `invalid argument format`.
-Check the flags on the host you are configuring with `tailscale serve --help`.
+The toggle syntax changed: on 1.102.x, `tailscale funnel 443 on` answers
+`Error: the CLI for serve and funnel has changed.`, adding a trailing `on` after
+flags answers `Error: invalid argument format`, and `off` is still parsed (it
+removes an existing mount). Use the target-URL form above and check the flags on
+the host you are configuring with `tailscale serve --help` / `funnel --help`.
 
 nginx equivalent:
 
@@ -214,23 +219,50 @@ cache no-overwrite, and no create/rename/move/trash/delete request anywhere.
 
 ```bash
 IDENTITY_DENYLIST=/secure/path/identity-denylist.txt bash scripts/identity-scan.sh .
-# identity_scan=PASS
+# identity_scan=PASS enforced_hits=0 exemptions=<N>
 ```
 
-The scan covers four places, because a leak hides in any of them: the working
-tree, every reachable commit/blob, every commit and tag message, and the Git
-identity metadata. Approval criteria (all must hold):
+Four surfaces are scanned at line level: the working tree, every reachable blob,
+every commit and tag message, and the Git identity metadata — author, committer
+and tagger names and addresses, where the deny-list applies to the fields
+themselves and not only to file contents. A fifth pass covers `main.js`,
+`manifest.json` and `styles.css` on disk.
 
-- zero detector hits in the tree, the history and the release artefacts;
-- every author, committer and tagger name equals the project identity
-  (`EXPECTED_IDENTITY_NAME`, default `obsidian-gdrive-streaming`);
-- every identity address matches `ALLOWED_IDENTITY_EMAIL_RE`, by default a
-  GitHub noreply address, so commits stay attributed without exposing a mailbox.
+Approval criteria (all must hold for exit 0):
 
-The built-in detectors cover tailnet domains, RFC1918 addresses, consumer mailbox
-domains, Google OAuth client ids, Drive links and service-account addresses. Add
-your own host, account, project and chat names through `IDENTITY_DENYLIST`, a
-file kept **outside** the tree (a committed denylist would itself leak what it
-lists). `scripts/identity-scan.sh` is excluded from its own tree scan because the
-detector patterns appear in it as literals; everything else, tracked or not, is
-scanned. Run the scan after every rewrite that changes commit or tag metadata.
+- zero enforced hits across every surface;
+- every author, committer and tagger name equals `EXPECTED_IDENTITY_NAME`
+  (default `obsidian-gdrive-streaming`);
+- every identity address matches `ALLOWED_IDENTITY_EMAIL_RE`, by default a GitHub
+  noreply address, so commits stay attributed without exposing a mailbox;
+- every exemption in play carries a justification.
+
+**Declared exemptions.** `scripts/identity-exemptions.txt` holds
+`regex :: justification` lines. An exemption is honoured only when it carries a
+justification, and every hit it silences is printed as `EXEMPT ... <= <why>`, so
+a gate run always shows what it silenced and why. This repository declares one
+class of exception: the public owner account, because the installation
+instructions must name the slug a user types into BRAT and the Git identity uses
+that account's noreply address to keep commits attributed. An exemption line
+without a justification fails the gate.
+
+**Strict mode.** `IDENTITY_REQUIRE_NO_EXEMPTIONS=1` fails whenever an exemption
+was used. For a repository published under a personal account this is expected to
+fail, and it is the honest way to expose the difference: the enforced rule is
+"zero operator-infrastructure identifiers, one declared public exception", not
+"no owner identity anywhere". Publish from a project-owned account if you need
+the stricter property; the same strict run then passes.
+
+**Scope of the self-exclusion.** Exactly `scripts/identity-scan.sh` (the detector
+patterns are literals in it) and exactly the exemptions file (it must name what it
+exempts) are excluded. There is no basename-wide or wildcard exclusion, so a file
+planted at another path is still caught:
+
+```bash
+mkdir -p sub && printf 'host: <one of your deny-list identifiers>\n' > sub/identity-scan.sh
+bash scripts/identity-scan.sh .    # must report HIT tree ./sub/identity-scan.sh
+rm -rf sub
+```
+
+The deny-list itself lives **outside** the tree: a committed deny-list leaks
+exactly what it lists. Add your own host, account, project and chat names there.
