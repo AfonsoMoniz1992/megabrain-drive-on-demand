@@ -38,7 +38,7 @@ describe("drive root scope", () => {
     expect(scope.resolveRelativePath("")).toEqual([]);
     expect(scope.resolveRelativePath("notes/2026/plan.md")).toEqual(["notes", "2026", "plan.md"]);
     for (const bad of ["/etc/passwd", "../secrets.md", "notes/../../secrets.md", "notes/./plan.md", "notes//plan.md", "notes\\plan.md", "..", ".", "  ", "notes/\u0000bad.md"]) {
-      expect(() => scope.resolveRelativePath(bad)).toThrow(/GDriveStreaming directory/i);
+      expect(() => scope.resolveRelativePath(bad)).toThrow(/GDrive Streaming directory/i);
     }
   });
 

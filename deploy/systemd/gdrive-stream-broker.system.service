@@ -1,4 +1,4 @@
-# GDriveStreaming OAuth broker — self-hosted system service template.
+# GDrive Streaming OAuth broker — self-hosted system service template.
 # Install as root only after adapting the explicit filesystem roots and proving
 # the mount namespace/AppArmor denials on the target host. No secret value is
 # allowed in this file or in runtime.env; only secret-file paths are referenced.

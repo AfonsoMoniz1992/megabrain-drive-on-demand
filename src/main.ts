@@ -378,7 +378,7 @@ class GDriveStreamingSettingsTab extends PluginSettingTab {
       if (!this.containerEl.isConnected) { this.hide(); return; }
       this.display();
     });
-    containerEl.createEl("h2", { text: "GDriveStreaming Drive on Demand" });
+    containerEl.createEl("h2", { text: "GDrive Streaming" });
 
     const state = describeBrowserState(this.plugin.enrollmentState(), this.plugin.deviceFingerprint(), this.plugin.settings.allowedRootName || "unconfigured");
     const status = containerEl.createDiv({ cls: "gdrive-stream-settings-status" });

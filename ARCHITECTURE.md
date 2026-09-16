@@ -2,7 +2,7 @@
 
 ## Product boundary
 
-GDriveStreaming Drive on Demand is a derivative/self-hosted implementation, not a clean-room claim. Provenance is documented in [FORK_PROVENANCE.md](FORK_PROVENANCE.md).
+GDrive Streaming is a derivative/self-hosted implementation, not a clean-room claim. Provenance is documented in [FORK_PROVENANCE.md](FORK_PROVENANCE.md).
 
 The project supports a plugin-owned remote experience. It never inserts remote records into Obsidian's vault adapter or metadata index.
 
@@ -11,7 +11,7 @@ Obsidian mobile plugin ── pairing/lease only ──> operator HTTPS broker �
 Obsidian mobile plugin ── read-only Drive API ──────────────────────────> Google Drive
 ```
 
-The broker is not a Drive data plane. It does not proxy, cache, search or index GDriveStreaming file content. The plugin obtains read-only metadata and selected file bytes directly from Google after a device-bound lease is valid.
+The broker is not a Drive data plane. It does not proxy, cache, search or index the Drive content it serves. The plugin obtains read-only metadata and selected file bytes directly from Google after a device-bound lease is valid.
 
 ## Current implementation
 

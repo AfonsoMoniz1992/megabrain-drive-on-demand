@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# GDriveStreaming OAuth broker — step 6b post-enable acceptance (blocking).
+# GDrive Streaming OAuth broker — step 6b post-enable acceptance (blocking).
 #
 # Run immediately after the system service is enabled. It proves the service is the sole
 # owner of the four configured broker listeners and the only broker process alive. Every

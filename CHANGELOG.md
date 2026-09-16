@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.0.0 — first public, generic release
+
+### Changed
+
+- Renamed the project to **GDrive Streaming** (`obsidian-gdrive-streaming`) and made every internal identifier generic: `GDRIVE_STREAM_*` environment variables, `gdrive-stream-broker.service`, service account `gdrive-stream-broker`, install roots `/opt`, `/etc` and `/var/lib/gdrive-stream-broker`, AppArmor profile `gdrive-stream-broker`, plugin id `obsidian-gdrive-streaming` and cache directory `_gdrive-stream-cache`.
+- Rewrote commit authorship so the public history carries no operator-specific network name.
+- Documentation now reads as a generic recipe: no hostname, project ID, account, OAuth client ID, secret-file label or Drive identifier from the reference deployment appears anywhere in the repository.
+- Added operator troubleshooting for the two failures that cost the reference deployment the most time: a consent page that opens without the Drive owner's session, and a broker that is unreachable from the same LAN while mobile data works.
+
+### Notes
+
+- Behaviour is otherwise identical to v0.2.6.
+- The plugin id changed, so an existing installation must be removed and re-added; enrolment state does not carry over to the new id.
+
 ## v0.2.6 — show the waiting-for-consent state while it is happening
 
 ### Fixed

@@ -1,4 +1,4 @@
-# GDriveStreaming OAuth broker — AppArmor profile for a root-owned system service.
+# GDrive Streaming OAuth broker — AppArmor profile for a root-owned system service.
 #
 # This is intentionally paired with deploy/systemd/gdrive-stream-broker.system.service.
 # The systemd mount namespace hides /home; these explicit denials make the

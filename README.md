@@ -1,8 +1,8 @@
-# GDriveStreaming Drive on Demand
+# GDrive Streaming
 
-> **Status: public self-hosted beta.** The v0.2.6 release distributes only plugin artefacts: it contains no broker, OAuth client, callback host, Google account or Drive data. Physical iOS/Android vali...[truncated]
+> **Status: public self-hosted beta.** The v1.0.0 release distributes only plugin artefacts: it contains no broker, OAuth client, callback host, Google account or Drive data. Physical iOS/Android vali...[truncated]
 
-GDriveStreaming Drive on Demand is a self-hosted, **read-only** Obsidian mobile plugin for browsing an existing Google Drive knowledge tree. It provides a plugin-owned remote browser, metadata search, and explicit on-demand materialisation of one selected file for iOS and Android. It does not turn remote Drive records into native Obsidian vault files.
+GDrive Streaming is a self-hosted, **read-only** Obsidian mobile plugin for browsing an existing Google Drive knowledge tree. It provides a plugin-owned remote browser, metadata search, and explicit on-demand materialisation of one selected file for iOS and Android. It does not turn remote Drive records into native Obsidian vault files.
 
 ## What it does
 
@@ -33,26 +33,35 @@ Plugin: no client secret; no refresh-token persistence; plugin-owned cache only.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) and [SECURITY.md](SECURITY.md) for the trust boundaries and threat model.
 
-## Self-hosting from source
+## Apply this to yourself
 
-1. Read [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md) before creating an OAuth client or exposing a route.
-2. Create a dedicated harmless Drive test root, for example `example-test-root`.
-3. Set `GDRIVE_STREAM_ALLOWED_ROOT_NAME` in the broker runtime configuration and set **Allowed Drive test root** in the plugin settings to the **same** name. The broker refuses to start without an explicit root.
-4. Install the versioned system-service and AppArmor templates from `deploy/` as described in the guide.
-5. Prove the broker process cannot access either your production Drive mount or the test Drive mount before completing Google consent.
-6. Record non-secret results with [docs/DEPLOYMENT_EVIDENCE.md](docs/DEPLOYMENT_EVIDENCE.md), including iOS and Android acceptance.
+Everything below runs on **your** host with **your** Google account. Nothing in this repository points at anybody else's server, account or Drive.
 
-> The root name is a two-sided contract. The broker seals it into every device lease and the plugin rejects a lease sealed to a different root. Change it in both places together.
+1. **Google Cloud** — create your own project, enable the Drive API, configure a consent screen for your test users, and create a **Web application** OAuth client whose redirect URI is `https://<your-public-host>/gdrive-stream-oauth/google/callback`. You end up with a client ID and a client secret that never leave your host. Details: [GOOGLE_CLOUD_SETUP.md](GOOGLE_CLOUD_SETUP.md).
+2. **Test root** — create a dedicated, harmless Drive folder (for example `example-test-root`). Do not start with your real knowledge tree.
+3. **Broker** — build and deploy the broker as a system service under its own account, with the isolation and AppArmor templates in `deploy/`. Set `GDRIVE_STREAM_ALLOWED_ROOT_NAME` to your test-root name: the broker has **no default** and refuses to start without it. Follow [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md) end to end, including the post-enable acceptance gate.
+4. **Exposure** — publish only the OAuth callback path (`/gdrive-stream-oauth/...`) and keep the pairing/admin routes on your private network. A tunnel or reverse proxy is fine; the pairing API must not be public.
+5. **Plugin** — install it on the device (BRAT, links below) and enter **your** broker URL and the **same** test-root name in the plugin settings.
+6. **Enrol** — copy the 64-character device fingerprint the plugin shows, mint a one-time code on your broker, paste it, press **Enrol**, and approve the Google request in a browser that is already signed in as the Drive owner. The plugin shows `Waiting for Google consent` until the lease actually arrives, and only then `Enrolled`.
+7. **Verify before trusting it** — confirm the metadata listing, the metadata-only search, one explicit download, cache no-overwrite behaviour, and that no create/rename/move/trash/delete request is ever issued. Record non-secret results with [docs/DEPLOYMENT_EVIDENCE.md](docs/DEPLOYMENT_EVIDENCE.md).
+
+> The root name is a two-sided contract. The broker seals it into every device lease and the plugin rejects a lease sealed to a different root. Change it in both places together, and remember the guard is a product-level restriction: Google Drive OAuth is not folder-scoped.
 
 ## Install the beta with BRAT
 
 1. In Obsidian, install and enable [BRAT](https://github.com/TfTHacker/obsidian42-brat).
-2. In BRAT, choose **Add beta plugin** and enter this repository's `owner/repository` identifier.
-3. Choose **v0.2.6** and enable **GDriveStreaming Drive on Demand**.
+2. In BRAT, choose **Add beta plugin** and enter `AfonsoMoniz1992/obsidian-gdrive-streaming`.
+3. Choose **v1.0.0** and enable **GDrive Streaming**.
 4. Copy the full 64-character lowercase **Device enrollment fingerprint** shown by the plugin; this exact value is what the broker binds to the one-time code.
 5. Configure **your own** HTTPS broker URL and the same harmless test-root name on broker and plugin before enrolling a device.
 
 This release does not grant access to any shared Google account or service. A Google OAuth client in testing mode must be restricted to the operator's intended test users. Do not connect production data; see [STATUS.md](STATUS.md), [SECURITY_DECISION.md](SECURITY_DECISION.md), and [MOBILE_BETA_ACCEPTANCE.md](MOBILE_BETA_ACCEPTANCE.md).
+
+## Troubleshooting the two failures that matter most
+
+- **The consent page opens a sign-in form instead of your account.** In-app browsers (Telegram, Slack, other chat clients) do not share the phone browser's Google session. Long-press the link, copy it, and paste it into Safari or Chrome — or press **Enrol** on the device that owns the Drive account, so the approval opens in its own browser.
+- **`Broker transport` while you are on the same network as the broker.** Some routers block device-to-device traffic (client isolation / no hairpin), so the direct private-network path times out while a relayed path works. Use mobile data for the enrolment, or fix the router. Reaching the broker from an unrelated network proves the broker is fine.
+- **`Enrolled` appears and then reverts.** That was a real defect before v0.2.5: a pending pairing was rendered as enrolled. On v0.2.5+ the states are honest, and v0.2.6+ re-renders them while the consent window is open.
 
 ## Development and verification
 

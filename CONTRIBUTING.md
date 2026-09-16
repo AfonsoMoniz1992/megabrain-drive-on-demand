@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for improving GDriveStreaming Drive on Demand.
+Thank you for improving GDrive Streaming.
 
 - Read [FORK_PROVENANCE.md](FORK_PROVENANCE.md), [SECURITY.md](SECURITY.md) and [STATUS.md](STATUS.md) before proposing a feature.
 - Keep the first release read-only. Do not introduce Drive mutation calls, hidden sync, token persistence or undocumented telemetry.

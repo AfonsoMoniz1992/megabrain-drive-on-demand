@@ -99,7 +99,7 @@ export class DriveRootScope {
   resolveRelativePath(path: string): string[] {
     if (path === "") return [];
     const trimmed = path.trim();
-    const reject = (): never => { throw new Error(`GDriveStreaming directory paths must be relative and must not leave the ${this.name} root`); };
+    const reject = (): never => { throw new Error(`GDrive Streaming directory paths must be relative and must not leave the ${this.name} root`); };
     if (trimmed === "" || trimmed.startsWith("/") || trimmed.startsWith("\\") || trimmed.includes("\\")) reject();
     if (/[\u0000-\u001f]/.test(trimmed)) reject();
     const segments = trimmed.split("/");
