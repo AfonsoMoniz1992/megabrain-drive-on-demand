@@ -223,6 +223,53 @@ build_fixture empty
 run_gate IDENTITY_ALLOW_NO_DENYLIST=1
 check smoke_mode_flagged 0 'non-authoritative run'
 
+# T22 — an annotated tag with a foreign tagger is a hit. Regression test for a
+# for-each-ref format string that emitted "%x00" literally, so taggers were never
+# compared against the policy while the documentation claimed they were.
+build_fixture empty
+GIT_COMMITTER_NAME="Foreign Tagger" GIT_COMMITTER_EMAIL="tagger@example.test" \
+  git -C "$FIXTURE" tag -a "probe-$LEAK_ID" -m "annotated tag probe"
+run_gate "${AUTH_ENV[@]}"
+check foreign_annotated_tagger_reported 1 'HIT identity tagger'
+git -C "$FIXTURE" tag -d "probe-$LEAK_ID" >/dev/null
+
+# T23 — a deny-list listing both the slug and the full public address form is
+# satisfied only when both forms are declared.
+build_fixture declaring
+ADDR="${OWNER_ID}@users.noreply.github.com"
+printf '%s :: declared test exception, slug form\n%s :: declared test exception, full address form\n' \
+  "$OWNER_ID" "$ADDR" > "$FIXTURE/scripts/identity-exemptions.txt"
+printf '%s\n%s\n' "$OWNER_ID" "$ADDR" > "$WORK/two-line-denylist.txt"
+git -C "$FIXTURE" config user.email "$ADDR"
+git -C "$FIXTURE" commit -q --amend --reset-author --no-edit
+run_gate "IDENTITY_DENYLIST=$WORK/two-line-denylist.txt" "EXPECTED_IDENTITY_EMAIL=$ADDR"
+check slug_and_address_denylist_declared 0 'identity_scan=PASS_WITH_DECLARED_EXCEPTIONS'
+
+# T24 — an empty directory carries a name but no file path.
+build_fixture empty
+mkdir -p "$FIXTURE/dir-$LEAK_ID"
+run_gate "${AUTH_ENV[@]}"
+check empty_directory_name_reported 1 "HIT tree-path dir-$LEAK_ID"
+rmdir "$FIXTURE/dir-$LEAK_ID"
+
+# T25 — content that is not UTF-8 still has to be searched.
+build_fixture empty
+python3 - "$FIXTURE/wide.txt" "$LEAK_ID" <<'PY'
+import sys
+with open(sys.argv[1], "wb") as handle:
+    handle.write(("host: " + sys.argv[2] + "\n").encode("utf-16"))
+PY
+run_gate "${AUTH_ENV[@]}"
+check utf16_content_reported 1 'utf-16'
+rm -f "$FIXTURE/wide.txt"
+
+# T26 — reference names are published too.
+build_fixture empty
+git -C "$FIXTURE" tag "probe-$LEAK_ID"
+run_gate "${AUTH_ENV[@]}"
+check ref_name_reported 1 "HIT ref refs/tags/probe-$LEAK_ID"
+git -C "$FIXTURE" tag -d "probe-$LEAK_ID" >/dev/null
+
 echo "selftest_failures=${failures}"
 if [[ "$failures" -eq 0 ]]; then
   echo "identity_scan_selftest=PASS"

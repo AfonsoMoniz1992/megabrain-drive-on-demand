@@ -30,9 +30,12 @@ Two different things were cleaned, and they carry different evidence:
 The exact claim, so that it can be checked or refuted:
 
 - **enforced:** zero hits for the operator's out-of-tree deny-list and for the
-  built-in patterns across working-tree contents and file names, every reachable
-  object in history and its path, commit and tag messages, the Git identity
-  fields and the release artefacts. History is read as objects and matched in
+  built-in patterns across six surfaces: working-tree contents, file and
+  directory names, every reachable object in history and its path, commit and tag
+  messages, reference names, the Git identity fields (authors, committers and
+  taggers, the last parsed from the tag objects) and the release artefacts. Blobs
+  are searched as UTF-8, and additionally as UTF-16 when byte-order-marked and
+  with NUL bytes stripped; this is a text gate, not a binary inspector. History is read as objects and matched in
   Python with the same engine as every other surface — there is no POSIX-ERE
   pre-filter that a valid pattern could fail to survive. An authoritative run
   requires both the deny-list and the declared distributing account
@@ -43,9 +46,11 @@ The exact claim, so that it can be checked or refuted:
   installation instructions must name the slug a user types into BRAT, and the
   Git identity uses that account's noreply address so commits stay attributed.
   The exception is listed with a justification in
-  `scripts/identity-exemptions.txt`; every masked hit prints with that
-  justification, and a match in the Git identity metadata is reported as a known
-  exception rather than silenced. The verdict for this repository is
+  `scripts/identity-exemptions.txt`, in both the display and the complete address
+  form, so that a deny-list listing either produces a declared exception rather
+  than a failure; every masked hit prints with that justification, and a match in
+  the Git identity metadata is reported as a known exception rather than
+  silenced. The verdict for this repository is
   `PASS_WITH_DECLARED_EXCEPTIONS`, never a plain `PASS`.
 - **not claimed:** that the repository carries no owner identity anywhere, and
   that the gate proves absence rather than detecting what its patterns describe.
@@ -58,9 +63,11 @@ The exact claim, so that it can be checked or refuted:
   self-test and a non-authoritative built-in-pattern scan on every push.
 
 The gate's behaviour is tested rather than asserted: `scripts/identity-scan-selftest.sh`
-runs 22 adversarial scenarios against a disposable fixture, each checking the exit
+runs 28 adversarial scenarios against a disposable fixture, each checking the exit
 status and the expected output — including a deny-list pattern that is valid for
 the matcher but invalid as a POSIX extended regex, an identifier planted only in a
-file name, co-location and partial overlap with an exempted value, and a leak
+file name, one in an empty directory name, one in a reference name, one in UTF-16
+content, a foreign annotated tagger, co-location and partial overlap with an
+exempted value, a deny-list listing both forms of the declared account, and a leak
 present in history but removed from the tree.
 

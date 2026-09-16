@@ -17,13 +17,21 @@ close: truncation, ordering, partial overlap, and regex delimiters inside the
 patterns. Nothing is truncated before analysis; truncation happens only when
 printing.
 
-Surfaces scanned, all five:
+Surfaces scanned, all six:
 
     1. the working tree: file contents (whole lines) and file/directory names;
     2. every reachable commit and blob in the history, including paths;
     3. every commit message and every annotated tag message;
-    4. the Git identity metadata: author, committer and tagger names and addresses;
-    5. the release artefacts on disk (main.js, manifest.json, styles.css).
+    4. reference names (`git for-each-ref`);
+    5. the Git identity metadata: author, committer and tagger names and addresses.
+       Taggers are parsed from the tag objects themselves, never from a
+       for-each-ref format string;
+    6. the release artefacts on disk (main.js, manifest.json, styles.css).
+
+Encoding: every blob is searched as UTF-8, and additionally as UTF-16 when it
+starts with a byte-order mark and with NUL bytes stripped. This is a text gate
+over those representations, not a general binary inspector: an identifier hidden
+inside a compressed or encrypted payload is beyond what it can see.
 
 Detectors:
 
@@ -37,7 +45,9 @@ Detectors:
 
 Declared exemptions: $IDENTITY_EXEMPTIONS (default
 scripts/identity-exemptions.txt), `regex :: justification`. A line without a
-justification fails the run. Exemptions never apply to surface 4 except as
+justification fails the run; write each entry as a specific, literal public
+identifier, because a broad pattern is a powerful owner decision that the gate
+honours and reports. Exemptions never apply to surface 5 except as
 explicitly reported KNOWN exceptions, which change the verdict to
 PASS_WITH_DECLARED_EXCEPTIONS so a plain PASS can never hide one.
 
@@ -95,6 +105,7 @@ class Report:
     known_identity: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     configuration_errors: list[str] = field(default_factory=list)
+    taggers: set[tuple[str, str]] = field(default_factory=set)
 
     def counts(self) -> dict[str, int]:
         return {
@@ -280,9 +291,52 @@ def classify(
     # An exemption that matched nothing here is simply unused; nothing to report.
 
 
+def tag_tagger(payload: bytes) -> tuple[str, str] | None:
+    """Name and address from a tag object's `tagger` header.
+
+    Parsed from the object itself rather than from `git for-each-ref`: in a
+    for-each-ref format string the only separator that yields a NUL byte is
+    `%00`, and `%x00` is emitted literally, which silently produced a single
+    unsplit field and skipped taggers entirely.
+    """
+    text = payload.decode("utf-8", "replace")
+    for line in text.splitlines():
+        if line.startswith("tagger "):
+            rest = line[len("tagger ") :]
+            found = re.search(r"<([^<>]*)>", rest)
+            if found:
+                return rest[: found.start()].strip(), found.group(1).strip()
+            return rest.strip(), ""
+    return None
+
+
+def content_texts(raw: bytes) -> list[tuple[str, str]]:
+    """Every decoding of one blob that must be searched.
+
+    UTF-8 with replacement covers normal text. Content that is UTF-16, or that
+    carries NUL bytes, would not show an ASCII identifier as contiguous text
+    after a UTF-8 decode, so those representations are decoded and searched too.
+    A binary file is therefore searched as text rather than skipped.
+    """
+    variants: list[tuple[str, str]] = [("utf-8", raw.decode("utf-8", "replace"))]
+    if raw[:2] in (b"\xff\xfe", b"\xfe\xff") or b"\x00" in raw:
+        try:
+            variants.append(("utf-16", raw.decode("utf-16", "replace")))
+        except (UnicodeDecodeError, ValueError):
+            pass
+        variants.append(("nul-stripped", raw.decode("utf-8", "replace").replace("\x00", "")))
+    return variants
+
+
 def scan_tree(repo: Path, patterns: list[re.Pattern], exemptions: list[Exemption], report: Report) -> None:
     for root, dirs, files in os.walk(repo):
         dirs[:] = sorted(d for d in dirs if d not in EXCLUDED_DIRS)
+        for name in sorted(dirs):
+            # Directory entries are classified in their own right: an empty
+            # directory carries a name but no file path, so file paths alone
+            # would miss it.
+            rel = (Path(root) / name).relative_to(repo).as_posix()
+            classify(rel, patterns, exemptions, f"HIT tree-path {rel}", report)
         for name in sorted(files):
             path = Path(root) / name
             rel = path.relative_to(repo).as_posix()
@@ -290,11 +344,12 @@ def scan_tree(repo: Path, patterns: list[re.Pattern], exemptions: list[Exemption
             # directory name is still an identifier in the repository.
             classify(rel, patterns, exemptions, f"HIT tree-path {rel}", report)
             try:
-                content = path.read_text(encoding="utf-8", errors="replace")
+                raw = path.read_bytes()
             except OSError:
                 continue
-            for number, line in enumerate(content.splitlines(), start=1):
-                classify(line, patterns, exemptions, f"HIT tree {rel}:{number}", report)
+            for encoding, content in content_texts(raw):
+                for number, line in enumerate(content.splitlines(), start=1):
+                    classify(line, patterns, exemptions, f"HIT tree {rel}:{number} [{encoding}]", report)
 
 
 def scan_history(repo: Path, patterns: list[re.Pattern], exemptions: list[Exemption], report: Report) -> None:
@@ -313,14 +368,23 @@ def scan_history(repo: Path, patterns: list[re.Pattern], exemptions: list[Exempt
         short = sha[:12]
         path = paths.get(sha, "")
         if kind == "blob":
-            for number, line in enumerate(payload.decode("utf-8", "replace").splitlines(), start=1):
-                classify(line, patterns, exemptions, f"HIT blob {short} {path}:{number}", report)
+            for encoding, content in content_texts(payload):
+                for number, line in enumerate(content.splitlines(), start=1):
+                    classify(line, patterns, exemptions, f"HIT blob {short} {path}:{number} [{encoding}]", report)
         elif kind == "commit":
             for line in object_message(payload).splitlines():
                 classify(line, patterns, exemptions, f"HIT commit message {short}", report)
         elif kind == "tag":
             for line in object_message(payload).splitlines():
                 classify(line, patterns, exemptions, f"HIT tag message {short}", report)
+            tagger = tag_tagger(payload)
+            if tagger:
+                report.taggers.add(tagger)
+    # Reference names are published by the host as well as the objects they point at.
+    for ref in run_git(repo, "for-each-ref", "--format=%(refname)").splitlines():
+        ref = ref.strip()
+        if ref:
+            classify(ref, patterns, exemptions, f"HIT ref {ref}", report)
 
 
 def scan_identity(
@@ -339,37 +403,39 @@ def scan_identity(
             "may belong to, because the address-shape allowlist alone does not enforce one"
         )
 
-    names: set[str] = set()
-    emails: set[str] = set()
+    commit_names: set[str] = set()
+    commit_emails: set[str] = set()
     for line in run_git(repo, "log", "--all", "--format=%an%x00%cn%x00%ae%x00%ce").splitlines():
         parts = line.split("\x00")
         if len(parts) == 4:
-            names.update({parts[0], parts[1]})
-            emails.update({parts[2], parts[3]})
-    for line in run_git(repo, "for-each-ref", "--format=%(taggername)%x00%(taggeremail)", "refs/tags").splitlines():
-        parts = line.split("\x00")
-        if len(parts) == 2:
-            names.add(parts[0])
-            emails.add(parts[1].strip("<>"))
+            commit_names.update({parts[0], parts[1]})
+            commit_emails.update({parts[2], parts[3]})
+    # Tagger fields come from the tag objects themselves (see tag_tagger): asking
+    # for-each-ref for them silently produced nothing before.
+    tagger_names = {name for name, _ in report.taggers if name}
+    tagger_emails = {email for _, email in report.taggers if email}
 
-    for name in sorted(filter(None, names)):
-        if name != expected_name:
-            report.enforced.append(f"HIT identity name: {name[:DISPLAY_LIMIT]} (expected {expected_name})")
-        classify(name, patterns, exemptions, "HIT identity field", report, identity=True)
-    for email in sorted(filter(None, emails)):
-        if expected_email:
-            if email.lower() != expected_email.lower():
-                report.enforced.append(
-                    f"HIT identity address: {email[:DISPLAY_LIMIT]} (not the declared distributing account)"
-                )
-        elif not allowed_email.search(email):
-            report.enforced.append(f"HIT identity address: {email[:DISPLAY_LIMIT]} (outside the allowed pattern)")
-        classify(email, patterns, exemptions, "HIT identity field", report, identity=True)
+    for label, group in (("name", commit_names), ("tagger", tagger_names)):
+        for name in sorted(filter(None, group)):
+            if name != expected_name:
+                report.enforced.append(f"HIT identity {label}: {name[:DISPLAY_LIMIT]} (expected {expected_name})")
+            classify(name, patterns, exemptions, f"HIT identity field ({label})", report, identity=True)
+    for label, group in (("address", commit_emails), ("tagger address", tagger_emails)):
+        for email in sorted(filter(None, group)):
+            if expected_email:
+                if email.lower() != expected_email.lower():
+                    report.enforced.append(
+                        f"HIT identity {label}: {email[:DISPLAY_LIMIT]} (not the declared distributing account)"
+                    )
+            elif not allowed_email.search(email):
+                report.enforced.append(f"HIT identity {label}: {email[:DISPLAY_LIMIT]} (outside the allowed pattern)")
+            classify(email, patterns, exemptions, f"HIT identity field ({label})", report, identity=True)
     report.notes.append(
         "identity_email_policy=" + ("exact:" + expected_email if expected_email else "address-shape allowlist (weaker)")
     )
-    report.notes.append(f"distinct_identity_names={len(set(filter(None, names)))}")
-    report.notes.append(f"distinct_identity_addresses={len(set(filter(None, emails)))}")
+    report.notes.append(f"distinct_identity_names={len(commit_names | tagger_names)}")
+    report.notes.append(f"distinct_identity_addresses={len(commit_emails | tagger_emails)}")
+    report.notes.append(f"annotated_tags_with_tagger={len(report.taggers)}")
 
 
 def scan_artefacts(repo: Path, patterns: list[re.Pattern], exemptions: list[Exemption], report: Report) -> None:
@@ -377,9 +443,9 @@ def scan_artefacts(repo: Path, patterns: list[re.Pattern], exemptions: list[Exem
         path = repo / artefact
         if not path.is_file():
             continue
-        content = path.read_text(encoding="utf-8", errors="replace")
-        for number, line in enumerate(content.splitlines(), start=1):
-            classify(line, patterns, exemptions, f"HIT artefact {artefact}:{number}", report)
+        for encoding, content in content_texts(path.read_bytes()):
+            for number, line in enumerate(content.splitlines(), start=1):
+                classify(line, patterns, exemptions, f"HIT artefact {artefact}:{number} [{encoding}]", report)
 
 
 def main() -> int:

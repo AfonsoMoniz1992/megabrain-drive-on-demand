@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.0.7 — seventh-review fixes (taggers were never checked, encoding, scope)
+
+### Fixed
+
+- **Taggers were never checked, although the documentation said they were.** The gate asked `git for-each-ref --format=%(taggername)%x00%(taggeremail)`, and in a format string the only separator that yields a NUL byte is `%00`; `%x00` is emitted literally, so the split never produced two fields and the block that adds taggers to the policy never ran. An annotated tag with a foreign tagger passed with a plain PASS. Taggers are now parsed from the tag objects themselves (`tagger` header, read in the same `git cat-file --batch` pass), which removes the quoting question entirely, and the self-test has a foreign-annotated-tagger scenario.
+- **The declared exception did not cover the address form of the account it describes.** A deny-list that lists the public noreply address as its own entry — the natural way to write one — was only partially covered by the slug entry, so the gate refused it while the documentation presented the account as declared. Both forms are now declared, with the same justification, and the self-test covers a two-line deny-list of slug plus address.
+- **"File/directory names" exceeded the implementation for directories.** Directory entries are now classified in their own right, which matters for a name that carries no file path, and the self-test covers an empty directory whose name is an identifier.
+- **Content that is not UTF-8 would not be recognised.** A UTF-16 blob reproduced a miss. Every blob is now searched as UTF-8, additionally as UTF-16 when it starts with a byte-order mark, and with NUL bytes stripped. The runbook states the encoding policy and its limit: a text gate, not a general binary inspector.
+
+### Added
+
+- Reference names are scanned (`git for-each-ref --format=%(refname)`): they are published by the host like everything else.
+- The self-test is 28 scenarios and now also asserts the exit status of a ref-name hit, a UTF-16 hit and an empty-directory hit.
+
+### Documentation
+
+- `docs/RUNBOOK.md` section 8 and `PUBLICATION_PLAN.md` rewritten to the six surfaces, the encoding policy, the tagger source and the two declared forms of the exception. Exemptions are documented as specific literal identifiers rather than broad patterns.
+
 ## v1.0.6 — sixth-review fixes (no POSIX-ERE dependency and an enforced account)
 
 ### Fixed

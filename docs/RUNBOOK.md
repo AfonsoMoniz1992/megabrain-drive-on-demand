@@ -223,7 +223,7 @@ EXPECTED_IDENTITY_EMAIL=<your-account>@users.noreply.github.com \
 python3 scripts/identity_scan.py .
 # identity_scan=PASS_WITH_DECLARED_EXCEPTIONS
 
-bash scripts/identity-scan-selftest.sh          # 22 adversarial scenarios
+bash scripts/identity-scan-selftest.sh          # 28 adversarial scenarios
 # identity_scan_selftest=PASS
 ```
 
@@ -240,9 +240,21 @@ address-shape rule such as "anything at users.noreply.github.com" does not
 enforce a concrete account. `IDENTITY_ALLOW_NO_DENYLIST=1` permits a smoke run
 that reports itself as non-authoritative; that is what CI runs.
 
-**Five surfaces.** Working-tree contents **and file names**; every reachable
-object in history, with its path; every commit and tag message; the Git identity
-metadata; the release artefacts.
+**Six surfaces.** Working-tree contents, **file and directory names** (an empty
+directory carries a name and no file path, so directory entries are classified in
+their own right); every reachable object in history and its path; every commit and
+tag message; **reference names**; the Git identity metadata, meaning authors,
+committers **and taggers** (parsed from the tag objects themselves); and the
+release artefacts.
+
+**Encoding policy.** Each blob is searched as UTF-8, and additionally as UTF-16
+when it starts with a byte-order mark, and with NUL bytes stripped — so content
+that is UTF-16 without a mark, or that carries NUL bytes, is still searched rather
+than skipped. It is a text gate over these representations, not a general binary
+inspector: an identifier obfuscated inside a compressed or encrypted payload is
+outside what it can see. Unreachable objects left behind by a history rewrite are
+deliberately not scanned; a clean clone does not receive them, and the claim is
+limited to reachable history.
 
 **How matching works.** Every candidate text is matched against every pattern
 with full spans, and a match is exempt only when its **whole** span is covered by
@@ -254,8 +266,10 @@ that case). Nothing is truncated before analysis.
 
 **Declared exemptions** (`scripts/identity-exemptions.txt`, `regex ::
 justification`) print as `EXEMPT ... <= <why>`; a line without a justification
-fails the run. They never silence the identity metadata: a match there is
-reported as `KNOWN-IDENTITY-EXCEPTION`, counted, and forces
+fails the run. Write each entry as a specific, literal public identifier: a broad
+pattern is a powerful owner decision, and the gate honours it while reporting it.
+Exemptions never silence the identity metadata: a match there is reported as
+`KNOWN-IDENTITY-EXCEPTION`, counted, and forces
 `PASS_WITH_DECLARED_EXCEPTIONS`.
 
 **Declared scope exclusions:** `.git` and `node_modules`. Neither is distributed,
@@ -268,7 +282,7 @@ the tree is excluded.
 used, when one is declared, or when a known identity exception exists, printing
 each reason. For this repository it fails in every configuration.
 
-**The gate is itself tested:** 22 scenarios, each asserting the **exit status**
+**The gate is itself tested:** 28 scenarios, each asserting the **exit status**
 and the expected output, because a gate that prints FAIL and returns success is
 exactly what a text-only test misses. They cover: missing, empty, comment-only
 and invalid deny-lists; a missing declared account; identifiers planted in

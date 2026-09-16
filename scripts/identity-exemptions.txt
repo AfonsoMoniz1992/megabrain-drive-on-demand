@@ -1,4 +1,4 @@
-# Declared exemptions for scripts/identity-scan.sh.
+# Declared exemptions for scripts/identity_scan.py.
 #
 # Format: <regex> :: <justification>
 #
@@ -14,3 +14,4 @@
 
 AfonsoMoniz1992 :: public repository owner account, display form. The installation instructions must name the slug that hosts the published release, because that is what a user types into BRAT; the repository URL is public by construction.
 afonsomoniz1992 :: public repository owner account, address form. The Git identity uses this account's GitHub noreply address so published commits stay attributed to it; a neutral address would remove the identifier but also the attribution.
+afonsomoniz1992@users\.noreply\.github\.com :: the complete public address form of that same account, and the exact value the Git identity carries. Without this line a deny-list that lists the address as its own entry - which is the natural way to write one - is only partially covered by the entry above and the gate rightly refuses it. This adds no identifier that the two entries above do not already declare.
