@@ -219,50 +219,52 @@ cache no-overwrite, and no create/rename/move/trash/delete request anywhere.
 
 ```bash
 IDENTITY_DENYLIST=/secure/path/identity-denylist.txt bash scripts/identity-scan.sh .
-# identity_scan=PASS enforced_hits=0 exemptions=<N>
+# identity_scan=PASS enforced_hits=0 exemptions_used=<N>
+bash scripts/identity-scan-selftest.sh          # 10 adversarial scenarios
+# identity_scan_selftest=PASS
 ```
 
-Four surfaces are scanned at line level: the working tree, every reachable blob,
-every commit and tag message, and the Git identity metadata — author, committer
-and tagger names and addresses, where the deny-list applies to the fields
-themselves and not only to file contents. A fifth pass covers `main.js`,
-`manifest.json` and `styles.css` on disk.
+**A deny-list is required.** It lives outside the tree (a committed deny-list
+leaks what it lists) and must list your own host, account, project and chat
+identifiers, including the public account you publish from — otherwise the
+declared exemption below is never exercised. Without it the gate **fails**
+instead of reporting a pass, because it would only be proving the built-in
+patterns. `IDENTITY_ALLOW_NO_DENYLIST=1` allows a smoke run that prints
+`non-authoritative`.
 
-Approval criteria (all must hold for exit 0):
+**Four surfaces, scanned at line level:** the working tree, every reachable blob,
+every commit and tag message, the Git identity metadata (author, committer,
+tagger — the deny-list applies to those fields themselves), plus the release
+artefacts on disk.
 
-- zero enforced hits across every surface;
-- every author, committer and tagger name equals `EXPECTED_IDENTITY_NAME`
-  (default `obsidian-gdrive-streaming`);
-- every identity address matches `ALLOWED_IDENTITY_EMAIL_RE`, by default a GitHub
-  noreply address, so commits stay attributed without exposing a mailbox;
-- every exemption in play carries a justification.
+**Declared exclusions, reported with counts on every run:** `.git` and
+`node_modules` (neither is distributed; content that reaches a release surfaces
+under the artefact scan, which is exactly where bundled dependencies appear) and
+exactly two paths inside `scripts/`: the scanner, whose detector patterns are
+literals in it, and the exemptions file, which must name what it exempts. There
+is no basename-wide or wildcard exclusion.
 
 **Declared exemptions.** `scripts/identity-exemptions.txt` holds
-`regex :: justification` lines. An exemption is honoured only when it carries a
-justification, and every hit it silences is printed as `EXEMPT ... <= <why>`, so
-a gate run always shows what it silenced and why. This repository declares one
-class of exception: the public owner account, because the installation
-instructions must name the slug a user types into BRAT and the Git identity uses
-that account's noreply address to keep commits attributed. An exemption line
-without a justification fails the gate.
+`regex :: justification` lines; a line without a justification fails the gate.
+Masking is per identifier, not per line: the exempted substring is removed from
+the candidate line and the **remainder is re-scanned**, so an exempted value can
+never hide a co-located forbidden identifier. Every masked hit is printed as
+`EXEMPT ... <= <why>`.
 
-**Strict mode.** `IDENTITY_REQUIRE_NO_EXEMPTIONS=1` fails whenever an exemption
-was used. For a repository published under a personal account this is expected to
-fail, and it is the honest way to expose the difference: the enforced rule is
-"zero operator-infrastructure identifiers, one declared public exception", not
-"no owner identity anywhere". Publish from a project-owned account if you need
-the stricter property; the same strict run then passes.
+**Strict mode.** `IDENTITY_REQUIRE_NO_EXEMPTIONS=1` fails if an exemption was used
+*or* declared, so for this repository it fails in every configuration and prints
+both reasons — an exemption used, and an exception declared. That failure is the
+honest measure of the declared owner-account exception; it disappears if you
+publish from a project-owned account and declare nothing.
 
-**Scope of the self-exclusion.** Exactly `scripts/identity-scan.sh` (the detector
-patterns are literals in it) and exactly the exemptions file (it must name what it
-exempts) are excluded. There is no basename-wide or wildcard exclusion, so a file
-planted at another path is still caught:
+**The gate is itself tested.** `scripts/identity-scan-selftest.sh` builds a
+disposable fixture repository with run-time-generated sample identifiers and
+checks ten scenarios, including the two ways the gate could previously be
+bypassed: a forbidden identifier on the same line as an exempted value, and one
+planted at a path other than the scanner's own. Its samples are generated so the
+test file needs no exclusion from the scan it exercises.
 
-```bash
-mkdir -p sub && printf 'host: <one of your deny-list identifiers>\n' > sub/identity-scan.sh
-bash scripts/identity-scan.sh .    # must report HIT tree ./sub/identity-scan.sh
-rm -rf sub
-```
-
-The deny-list itself lives **outside** the tree: a committed deny-list leaks
-exactly what it lists. Add your own host, account, project and chat names there.
+Approval criteria (exit 0): a deny-list present; zero enforced hits on all four
+surfaces; every identity name equal to `EXPECTED_IDENTITY_NAME`; every identity
+address matching `ALLOWED_IDENTITY_EMAIL_RE`; every exemption justified; and, in
+strict mode, nothing declared and nothing used.

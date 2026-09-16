@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.0.4 — fourth-review fixes (gate could pass while hiding things)
+
+### Fixed
+
+- **Strict mode now fails as published.** It failed only when an exemption happened to be used, so running it as-is passed and the claim was false. It now fails when an exemption is *used* **and** when one is *declared*, printing both reasons.
+- **A deny-list is now required for an authoritative run.** Without one the gate proves only its built-in patterns, so it fails instead of reporting a pass; `IDENTITY_ALLOW_NO_DENYLIST=1` allows an explicitly non-authoritative smoke run.
+- **Exemptions can no longer hide a co-located identifier.** Masking is per identifier instead of per line: the exempted substring is removed and the remainder of the line is re-scanned, so a forbidden identifier sharing a line with an exempted value is reported.
+- **The declared directory exclusions are reported, not implied.** `.git` and `node_modules` are listed with counts on every run, together with the note that released artefacts are scanned separately, which is where bundled content surfaces.
+
+### Added
+
+- `scripts/identity-scan-selftest.sh`: ten adversarial scenarios against a disposable fixture, including the two bypasses found in review (co-located identifier on an exempted line; identifier planted under the scanner's own basename at another path). Fixture identifiers are generated at run time, so the test file needs no exclusion from the scan it exercises.
+
+### Changed
+
+- `docs/RUNBOOK.md` section 8 and `PUBLICATION_PLAN.md` rewritten so every claim matches the gate's actual behaviour, including the required deny-list and the exact list of exclusions.
+
 ## v1.0.3 — third-review fixes (gate hardening and exact claims)
 
 ### Fixed

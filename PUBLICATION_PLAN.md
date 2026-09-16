@@ -31,7 +31,10 @@ The exact claim, so that it can be checked or refuted:
 - **enforced:** zero operator-infrastructure identifiers — hostnames, tailnet
   domains, private addresses, cloud project and client ids, Drive ids, secret
   labels, account mailboxes — across the tree, the whole reachable history, the
-  commit and tag messages and the Git identity fields;
+  commit and tag messages, the Git identity fields and the release artefacts,
+  under a deny-list that the operator supplies from outside the tree. An
+  authoritative run requires that deny-list: without it the gate refuses to
+  report a pass;
 - **declared exception:** the public account that distributes the plugin. The
   installation instructions must name the slug a user types into BRAT, and the
   Git identity uses that account's noreply address so commits stay attributed.
@@ -40,10 +43,16 @@ The exact claim, so that it can be checked or refuted:
   silences together with that justification;
 - **not claimed:** that the repository carries no owner identity anywhere. A
   repository published under a personal account cannot claim that without moving
-  to a project-owned account. `IDENTITY_REQUIRE_NO_EXEMPTIONS=1` runs the gate in
-  strict mode and fails on the declared exception: that failure is the honest
-  measure of the difference, and it disappears if you publish from a
-  project-owned account.
+  to a project-owned account. `IDENTITY_REQUIRE_NO_EXEMPTIONS=1` fails in every
+  configuration for this repository — because an exemption is both declared and
+  used — and prints both reasons. That failure is the honest measure of the
+  difference, and it disappears if you publish from a project-owned account.
+
+The gate's own behaviour is tested, not asserted: `scripts/identity-scan-selftest.sh`
+builds a disposable fixture and checks ten scenarios, including a forbidden
+identifier co-located with an exempted value on one line and one planted at a path
+other than the scanner's own. Masking is per identifier, and the remainder of a
+line is re-scanned after masking, so an exemption cannot hide anything else.
 
 Residual risk, stated so it is not overread:
 

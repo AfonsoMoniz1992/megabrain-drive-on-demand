@@ -1,7 +1,7 @@
 {
   "id": "obsidian-gdrive-streaming",
   "name": "GDrive Streaming",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "minAppVersion": "1.11.4",
   "description": "Safety-first on-demand access to a Google Drive folder that you choose.",
   "author": "GDrive Streaming contributors",
