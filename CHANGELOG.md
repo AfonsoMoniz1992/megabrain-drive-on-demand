@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.2.6 — show the waiting-for-consent state while it is happening
+
+### Fixed
+
+- Enrollment state changes are now broadcast to every open surface. The settings screen previously rendered once, so an operator waiting on a Google approval kept reading a stale `Not enrolled` for the whole consent window, with no sign that the pairing was alive.
+- The settings screen re-renders on each enrollment state change and unsubscribes when it is closed.
+
+### Added
+
+- An immediate notice when enrolment starts, telling the operator to approve the request in the browser window that just opened.
+- A `Check status again` action on the settings screen while a pairing is waiting for consent.
+
+### Notes
+
+- Data-path behaviour is unchanged: no Drive request can happen without a lease, and the pairing window, scope and root checks are untouched.
+
 ## v0.2.5 — honest enrollment state and on-demand note opening
 
 ### Fixed

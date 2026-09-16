@@ -31,6 +31,7 @@ import {
 import { LatestWriteQueue } from "./settings-write-queue";
 import { BrowserController, describeBrowserState, describeEnrollmentLabel } from "./ui/browser-state";
 import { GDRIVE_STREAM_BROWSER_VIEW_TYPE, GDriveStreamingBrowserView, type GDriveStreamingBrowserHost } from "./ui/browser-view";
+import { EnrollmentBroadcast } from "./ui/enrollment-broadcast";
 
 /**
  * Read-only GDriveStreaming Drive plugin (mobile beta).
@@ -172,7 +173,7 @@ export default class GDriveStreamingDrivePlugin extends Plugin {
       openAuthorizationUrl: (url) => { window.open(url, "_blank"); },
       rootFolderName: configuredRootName,
       initialPairId: this.persistedPairId,
-      onEnrollment: (state) => { if (!this.logoutInProgress) void this.persistEnrollment(state); }
+      onEnrollment: (state) => { if (!this.logoutInProgress) void this.persistEnrollment(state); this.enrollmentBroadcast.notify(); }
     });
     this.controller = new BrowserController({
       source: client,
@@ -188,6 +189,18 @@ export default class GDriveStreamingDrivePlugin extends Plugin {
     this.persistedPairId = state.pairId;
     if (this.identity) await this.saveSettings();
     this.refreshBrowser();
+  }
+
+  /**
+   * Surfaces that render enrollment state subscribe here so they re-render on
+   * every state change. Without it, the settings screen keeps showing the state
+   * it was opened with, and the waiting-for-consent state is invisible to the
+   * operator who is waiting for it.
+   */
+  private readonly enrollmentBroadcast = new EnrollmentBroadcast();
+
+  onEnrollmentStateChange(listener: () => void): () => void {
+    return this.enrollmentBroadcast.subscribe(listener);
   }
 
   enrollmentState(): EnrollmentView { return this.leaseManager.enrollment; }
@@ -345,11 +358,26 @@ export default class GDriveStreamingDrivePlugin extends Plugin {
 }
 
 class GDriveStreamingSettingsTab extends PluginSettingTab {
+  private unsubscribeEnrollment: (() => void) | null = null;
+
   constructor(app: App, private readonly plugin: GDriveStreamingDrivePlugin) { super(app, plugin); }
+
+  hide(): void {
+    this.unsubscribeEnrollment?.();
+    this.unsubscribeEnrollment = null;
+  }
 
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
+    // Re-render on every enrollment state change. Enrolment waits for a Google
+    // approval for minutes, so a screen that only renders once would keep saying
+    // "Not enrolled" while the pairing is in fact alive and waiting.
+    this.unsubscribeEnrollment?.();
+    this.unsubscribeEnrollment = this.plugin.onEnrollmentStateChange(() => {
+      if (!this.containerEl.isConnected) { this.hide(); return; }
+      this.display();
+    });
     containerEl.createEl("h2", { text: "GDriveStreaming Drive on Demand" });
 
     const state = describeBrowserState(this.plugin.enrollmentState(), this.plugin.deviceFingerprint(), this.plugin.settings.allowedRootName || "unconfigured");
@@ -403,6 +431,7 @@ class GDriveStreamingSettingsTab extends PluginSettingTab {
         const code = codeInput.value.trim();
         if (!code) { new Notice("Enter the one-time enrollment code first."); return; }
         enrollButton.setAttribute("disabled", "true");
+        new Notice("Enrolment started. Approve the Google request in the browser window that opens.");
         void (async () => {
           try {
             await this.plugin.enrollDevice(code);
@@ -414,6 +443,10 @@ class GDriveStreamingSettingsTab extends PluginSettingTab {
           }
         })();
       };
+    }
+    if (state.status === "awaiting_consent") {
+      const checkAgain = containerEl.createEl("button", { text: "Check status again" });
+      checkAgain.onclick = () => this.display();
     }
 
     const openButton = containerEl.createEl("button", { text: "Open read-only Drive browser" });
