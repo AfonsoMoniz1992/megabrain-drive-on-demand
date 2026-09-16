@@ -1,10 +1,30 @@
 # Changelog
 
+## v1.0.2 — second-review fixes (identity metadata and runbook execution paths)
+
+### Fixed
+
+- **Git identity metadata**: authors, committers and taggers now carry the project policy identity (project name plus a GitHub noreply address). The previous personal name is gone from every reachable commit and tag object.
+- `CHANGELOG.md` no longer contains the literal truncation marker that the previous entry quoted.
+- `docs/RUNBOOK.md` secret-file permission rule and the expected callback response now match the implementation exactly.
+
+### Added
+
+- `scripts/identity-scan.sh`: publish gate that scans the working tree, every reachable commit, blob, commit message and tag message, the release artefacts and the Git identity metadata, with explicit approval criteria and a non-zero exit on any hit.
+- `docs/RUNBOOK.md` section 8 documents that gate, its criteria and why the deny-list must live outside the tree.
+- `docs/RUNBOOK.md` section 3 builds the broker (`npm ci`, `npm run verify`, `npm run broker:build`) before installing, because the unit starts an output that is not committed.
+
+### Changed
+
+- `docs/RUNBOOK.md` routing uses the current Tailscale CLI form (`sudo`, no trailing `on`/`off` toggle) and documents the funnel/serve split.
+- `docs/RUNBOOK.md` section 7 documents a complete `token-key` rotation, archiving the state sealed with the old key, instead of a restart-and-re-enrol note that would leave the service in a restart loop.
+- `PUBLICATION_PLAN.md` separates the checked historical-content cleaning from the declared Git identity policy, and limits the reproducible-build claim to artefact-to-source correspondence.
+
 ## v1.0.1 — review fixes, runbook and distribution notices
 
 ### Fixed
 
-- Removed literal truncation markers (`...[truncated]`) that had been committed into `README.md`, `STATUS.md` and `CHANGELOG.md`, replacing them with the intended sentences.
+- Removed the literal truncation markers that had been committed into `README.md`, `STATUS.md` and `CHANGELOG.md`, replacing them with the intended sentences.
 
 ### Added
 

@@ -1,6 +1,6 @@
 # GDrive Streaming
 
-> **Status: public self-hosted beta.** The v1.0.1 release distributes only plugin artefacts: it contains no broker, OAuth client, callback host, Google account or Drive data. Physical iOS/Android validation stays operator-side; record it with [docs/DEPLOYMENT_EVIDENCE.md](docs/DEPLOYMENT_EVIDENCE.md).
+> **Status: public self-hosted beta.** The v1.0.2 release distributes only plugin artefacts: it contains no broker, OAuth client, callback host, Google account or Drive data. Physical iOS/Android validation stays operator-side; record it with [docs/DEPLOYMENT_EVIDENCE.md](docs/DEPLOYMENT_EVIDENCE.md).
 
 GDrive Streaming is a self-hosted, **read-only** Obsidian mobile plugin for browsing an existing Google Drive knowledge tree. It provides a plugin-owned remote browser, metadata search, and explicit on-demand materialisation of one selected file for iOS and Android. It does not turn remote Drive records into native Obsidian vault files.
 
@@ -51,7 +51,7 @@ Everything below runs on **your** host with **your** Google account. Nothing in 
 
 1. In Obsidian, install and enable [BRAT](https://github.com/TfTHacker/obsidian42-brat).
 2. In BRAT, choose **Add beta plugin** and enter `AfonsoMoniz1992/obsidian-gdrive-streaming`.
-3. Choose **v1.0.1** and enable **GDrive Streaming**.
+3. Choose **v1.0.2** and enable **GDrive Streaming**.
 4. Copy the full 64-character lowercase **Device enrollment fingerprint** shown by the plugin; this exact value is what the broker binds to the one-time code.
 5. Configure **your own** HTTPS broker URL and the same harmless test-root name on broker and plugin before enrolling a device.
 
@@ -74,6 +74,7 @@ npm run verify
 
 ## Documentation
 
+- [scripts/identity-scan.sh](scripts/identity-scan.sh) — publish gate: scans the tree, the whole reachable history and the Git identity metadata for operator identifiers.
 - [docs/RUNBOOK.md](docs/RUNBOOK.md) — copy-paste runbook: secret generation, service install, routing examples, admin API and verification commands with expected outputs.
 - [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md) — generic self-hosting, isolation, OAuth, and recovery procedure.
 - [docs/DEPLOYMENT_EVIDENCE.md](docs/DEPLOYMENT_EVIDENCE.md) — non-secret evidence template.

@@ -1,6 +1,6 @@
 # Android beta installation
 
-> **Public self-hosted beta v1.0.1 — Android validation is pending.** The release contains only plugin artefacts. It includes no broker, Google OAuth client, callback host, account, token, or Drive data.
+> **Public self-hosted beta v1.0.2 — Android validation is pending.** The release contains only plugin artefacts. It includes no broker, Google OAuth client, callback host, account, token, or Drive data.
 
 Use only a disposable local vault, an operator-owned broker, and harmless test data. Do not connect a production knowledge tree.
 
@@ -8,7 +8,7 @@ Use only a disposable local vault, an operator-owned broker, and harmless test d
 
 1. Install Obsidian from Google Play and open a dedicated test vault.
 2. Install and enable [BRAT](https://github.com/TfTHacker/obsidian42-brat).
-3. In BRAT choose **Add beta plugin**, enter this repository's `owner/repository` identifier, then select **v1.0.1**.
+3. In BRAT choose **Add beta plugin**, enter this repository's `owner/repository` identifier, then select **v1.0.2**.
 4. Enable **GDrive Streaming**.
 5. Copy the full 64-character lowercase **Device enrollment fingerprint** shown in settings. The broker binds the one-time code to this exact value.
 6. Configure your own HTTPS broker URL and **Allowed Drive test root**. The root name must match the one configured in your broker's `GDRIVE_STREAM_ALLOWED_ROOT_NAME`.

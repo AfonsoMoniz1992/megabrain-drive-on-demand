@@ -44,7 +44,10 @@ shred -u /tmp/token-key /tmp/admin-token /tmp/oauth-client-secret
 
 The master key must decode to exactly 32 bytes (padded or unpadded base64 is
 accepted) and the admin token must be at least 16 characters; the broker refuses
-to start otherwise. Secret files must be `root:<service group>` mode `0440`.
+to start otherwise. Secret file permissions are enforced too: a
+`root:<service group>` file must be group-read-only for the service (`0440` or
+`0640`), a file owned by the service account must be `0600`, and a
+group-writable or other-accessible secret file is refused.
 
 ## 2. Write the non-secret runtime file
 
@@ -64,7 +67,18 @@ Google consent somewhere other than the device (for example the phone owner
 approves on a laptop), raise it to `600000` and treat that as the time budget
 for the whole round trip.
 
-## 3. Install the service
+## 3. Build, then install the service
+
+Build first: the unit starts `broker/dist/index.js`, and `broker/dist/` is not
+committed, so a plain clone has nothing to run.
+
+```bash
+npm ci                 # exact dependency tree from the lockfile
+npm run verify         # type checks, the full test suite, the plugin bundle
+npm run broker:build   # produces broker/dist/index.js
+```
+
+Then install the prepared checkout:
 
 ```bash
 sudo install -d -m 0755 /opt/gdrive-stream-broker/releases
@@ -90,10 +104,16 @@ Tailscale (the public path carries only the callback; the pairing API stays on
 the tailnet):
 
 ```bash
-tailscale serve --bg --https=443  --set-path=/gdrive-stream-oauth http://127.0.0.1:34005
-tailscale funnel --bg --https=443  --set-path=/gdrive-stream-oauth on   # only if the callback must be public
-tailscale serve --bg --https=8445 --set-path=/gdrive-stream-api   http://127.0.0.1:34006
+# Public callback path. Needs root (or run `tailscale set --operator=$USER` once).
+sudo tailscale funnel --bg --https=443 --set-path=/gdrive-stream-oauth http://127.0.0.1:34005
+# Pairing/claim API: tailnet only, no funnel.
+sudo tailscale serve  --bg --https=8445 --set-path=/gdrive-stream-api http://127.0.0.1:34006
+sudo tailscale serve status      # confirm both mounts, then `tailscale funnel status`
 ```
+
+On Tailscale 1.102.x the target is the local URL and there is no trailing
+`on`/`off` toggle — that older form now fails with `invalid argument format`.
+Check the flags on the host you are configuring with `tailscale serve --help`.
 
 nginx equivalent:
 
@@ -141,7 +161,7 @@ token answers `401 {"error":"unauthorized"}`.
 sudo ss -ltnp | grep -E ':(34003|34004|34005|34006)\b'
 
 # 2. The callback path answers publicly, and only that path.
-curl -s -o /dev/null -w '%{http_code}\n' https://<your-public-host>/gdrive-stream-oauth/google/callback   # 400 (no code) rather than a page
+curl -s -o /dev/null -w '%{http_code}\n' https://<your-public-host>/gdrive-stream-oauth/google/callback   # 400 with the gateway's HTML failure page
 curl -s -o /dev/null -w '%{http_code}\n' https://<your-public-host>/gdrive-stream-oauth/other           # 404
 
 # 3. The pairing mount answers on the private network and refuses junk.
@@ -162,12 +182,55 @@ cache no-overwrite, and no create/rename/move/trash/delete request anywhere.
 - **Revoke a device**: `POST /admin/revoke` with its `pairId`. Revocation also
   clears the stored refresh token, so the next enrolment needs a fresh Google
   consent round trip.
-- **Rotate a secret**: replace the file, then `systemctl restart
-  gdrive-stream-broker`. Rotating `token-key` invalidates the encrypted state
-  files; re-enrol the devices afterwards.
+- **Rotate `admin-token` or `oauth-client-secret`**: install the new file, then
+  `sudo systemctl restart gdrive-stream-broker`. Existing device enrolments keep
+  working, because neither value is used to seal the state files.
+- **Rotate `token-key`** (the master key that seals the state files). The stored
+  records are AES-256-GCM sealed with it, so a new key cannot read the old
+  files: the broker fails while loading its state and `Restart=on-failure` loops.
+  Archive the state deliberately, in this order:
+
+  ```bash
+  sudo systemctl stop gdrive-stream-broker
+  sudo mv /var/lib/gdrive-stream-broker /var/lib/gdrive-stream-broker.pre-rotation.$(date +%Y%m%d%H%M%S)
+  sudo install -d -m 0700 -o gdrive-stream-broker -g gdrive-stream-broker /var/lib/gdrive-stream-broker
+  sudo install -m 0440 -o root -g gdrive-stream-broker <new-token-key-file> /etc/gdrive-stream-broker/secrets/token-key
+  sudo systemctl start gdrive-stream-broker
+  bash deploy/post-enable-acceptance.sh      # post_enable_acceptance=PASS
+  ```
+
+  Consequences: every device enrols again with a fresh Google consent, the
+  archive keeps the old sealed records readable only with the old key, and the
+  operator should revoke the superseded Drive grant in the Google account. Keep
+  the archive only as long as you need the audit trail, then destroy it.
 - **Suspect compromise**: revoke the Google grant in the operator account,
   revoke the device, stop the service, preserve sanitised logs, then rotate the
   client secret, admin token and master key.
 - **Uninstall**: stop and disable the service, remove the routing mounts, then
   remove the release, configuration and state directories — never delete
   production data as part of a rollback.
+
+## 8. Identity scan before every public push, tag or release
+
+```bash
+IDENTITY_DENYLIST=/secure/path/identity-denylist.txt bash scripts/identity-scan.sh .
+# identity_scan=PASS
+```
+
+The scan covers four places, because a leak hides in any of them: the working
+tree, every reachable commit/blob, every commit and tag message, and the Git
+identity metadata. Approval criteria (all must hold):
+
+- zero detector hits in the tree, the history and the release artefacts;
+- every author, committer and tagger name equals the project identity
+  (`EXPECTED_IDENTITY_NAME`, default `obsidian-gdrive-streaming`);
+- every identity address matches `ALLOWED_IDENTITY_EMAIL_RE`, by default a
+  GitHub noreply address, so commits stay attributed without exposing a mailbox.
+
+The built-in detectors cover tailnet domains, RFC1918 addresses, consumer mailbox
+domains, Google OAuth client ids, Drive links and service-account addresses. Add
+your own host, account, project and chat names through `IDENTITY_DENYLIST`, a
+file kept **outside** the tree (a committed denylist would itself leak what it
+lists). `scripts/identity-scan.sh` is excluded from its own tree scan because the
+detector patterns appear in it as literals; everything else, tracked or not, is
+scanned. Run the scan after every rewrite that changes commit or tag metadata.
