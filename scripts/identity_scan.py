@@ -466,6 +466,7 @@ def main() -> int:
     print(f"builtin_patterns={len(BUILTIN_PATTERNS)}")
     for note in report.notes:
         print(note)
+    notes_already_printed = len(report.notes)
     print(f"excluded_dirs={','.join(sorted(EXCLUDED_DIRS))} (not distributed; a release is scanned under surface 5)")
     print(f"strict_mode={int(strict)}")
 
@@ -478,6 +479,12 @@ def main() -> int:
         scan_identity(repo, patterns, exemptions, report, authoritative)
         print("== 4. release artefacts on disk ==")
         scan_artefacts(repo, patterns, exemptions, report)
+        # Notes added while scanning (identity policy, how many taggers were
+        # enumerated) are evidence for the claims, so they are printed after the
+        # work that produced them rather than before it.
+        print("== 5. notes ==")
+        for note in report.notes[notes_already_printed:]:
+            print(note)
 
     for line in report.enforced:
         print(line)

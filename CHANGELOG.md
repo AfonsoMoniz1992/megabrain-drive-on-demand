@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.8 — evidence ordering in the gate output
+
+### Fixed
+
+- **Summary notes were printed before the scans that produce them.** The identity policy note and the count of enumerated annotated taggers appeared in the configuration section, so the trail that shows taggers were actually compared against the policy was never visible in the output. Notes produced by scanning are now printed in a closing notes section.
+
 ## v1.0.7 — seventh-review fixes (taggers were never checked, encoding, scope)
 
 ### Fixed
