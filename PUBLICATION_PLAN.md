@@ -11,3 +11,19 @@ The repository is public source for review and self-hosted testing. Publication 
 - Treat Obsidian Community Directory submission as a distinct legal/provenance gate.
 
 The exact release sequence is in [RELEASE.md](RELEASE.md).
+
+## Identity cleanliness scope and residual risk
+
+The public history was rewritten before this release: every reachable commit,
+tag object and blob in this repository carries a generic identity, and the
+historical file contents use the current generic names. What that does and does
+not prove:
+
+- It covers every object reachable from the published refs. It cannot prove the
+  absence of objects that GitHub may still serve from earlier force-pushed
+  states; treat any previously published commit SHA as public.
+- Tags are recreated, not signed, so tag timestamps are not provenance evidence.
+  The reproducible build from source is the compensating control.
+- If a future change reintroduces an operator-specific value, the scan in
+  `docs/RUNBOOK.md` is not automated: re-run the identity scan before publishing.
+

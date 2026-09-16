@@ -1,6 +1,6 @@
 # GDrive Streaming
 
-> **Status: public self-hosted beta.** The v1.0.0 release distributes only plugin artefacts: it contains no broker, OAuth client, callback host, Google account or Drive data. Physical iOS/Android vali...[truncated]
+> **Status: public self-hosted beta.** The v1.0.0 release distributes only plugin artefacts: it contains no broker, OAuth client, callback host, Google account or Drive data. Physical iOS/Android validation stays operator-side; record it with [docs/DEPLOYMENT_EVIDENCE.md](docs/DEPLOYMENT_EVIDENCE.md).
 
 GDrive Streaming is a self-hosted, **read-only** Obsidian mobile plugin for browsing an existing Google Drive knowledge tree. It provides a plugin-owned remote browser, metadata search, and explicit on-demand materialisation of one selected file for iOS and Android. It does not turn remote Drive records into native Obsidian vault files.
 
@@ -74,6 +74,7 @@ npm run verify
 
 ## Documentation
 
+- [docs/RUNBOOK.md](docs/RUNBOOK.md) — copy-paste runbook: secret generation, service install, routing examples, admin API and verification commands with expected outputs.
 - [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md) — generic self-hosting, isolation, OAuth, and recovery procedure.
 - [docs/DEPLOYMENT_EVIDENCE.md](docs/DEPLOYMENT_EVIDENCE.md) — non-secret evidence template.
 - [ARCHITECTURE.md](ARCHITECTURE.md) — data flow and Obsidian API limits.
