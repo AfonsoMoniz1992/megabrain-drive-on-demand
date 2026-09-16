@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.0.1 — review fixes, runbook and distribution notices
+
+### Fixed
+
+- Removed literal truncation markers (`...[truncated]`) that had been committed into `README.md`, `STATUS.md` and `CHANGELOG.md`, replacing them with the intended sentences.
+
+### Added
+
+- `docs/RUNBOOK.md`: copy-paste runbook covering secret generation, the non-secret runtime file, service installation, routing examples, the admin API (enrolment, status, revocation) and verification commands with their expected non-secret outputs.
+- Third-party notices for the libraries bundled into the published `main.js` (`@noble/ciphers`, `@noble/curves`, `@noble/hashes` 2.4.0, MIT), with the full licence text.
+- `LICENSE` and `THIRD_PARTY_NOTICES.md` now ship as release assets alongside the plugin artefacts.
+
+### Changed
+
+- Historical file contents were rewritten so the entire reachable history uses the generic identity, not only the current commit.
+- `PUBLICATION_PLAN.md` now states the identity-cleanliness scope and its residual risk (force-pushed objects may still be served by the host; tags are recreated, not signed).
+
 ## v1.0.0 — first public, generic release
 
 ### Changed
