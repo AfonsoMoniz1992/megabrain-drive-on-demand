@@ -1,6 +1,6 @@
 {
   "name": "obsidian-gdrive-streaming",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Safety-first Google Drive on-demand access for Obsidian GDriveStreaming vaults",
   "private": true,
   "type": "module",

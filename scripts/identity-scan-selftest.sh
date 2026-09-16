@@ -44,6 +44,12 @@ printf 'valid%s\n[unclosed\n' "$NONCE" > "$INVALID_DENY"
 
 AUTH_ENV=("IDENTITY_DENYLIST=$DENY" "EXPECTED_IDENTITY_EMAIL=$PROJECT_EMAIL")
 
+fixture_commit() {   # $1 = message
+  GIT_AUTHOR_NAME="$PROJECT_NAME" GIT_AUTHOR_EMAIL="$PROJECT_EMAIL" \
+  GIT_COMMITTER_NAME="$PROJECT_NAME" GIT_COMMITTER_EMAIL="$PROJECT_EMAIL" \
+    git -C "$FIXTURE" commit -q -m "$1"
+}
+
 build_fixture() {   # $1 = "declaring" | "empty"
   rm -rf "$FIXTURE"
   mkdir -p "$FIXTURE/scripts"
@@ -57,10 +63,14 @@ build_fixture() {   # $1 = "declaring" | "empty"
   fi
   printf 'Fixture repository. No identifiers here.\n' > "$FIXTURE/README.md"
   git -C "$FIXTURE" init -q
+  # The identity is pinned per commit as well as in the configuration: an
+  # ambient GIT_AUTHOR_*/GIT_COMMITTER_* variable overrides `git config`, so a
+  # developer shell that exports one would otherwise change what the fixtures
+  # contain and make this self-test pass or fail for the wrong reason.
   git -C "$FIXTURE" config user.name "$PROJECT_NAME"
   git -C "$FIXTURE" config user.email "$PROJECT_EMAIL"
   git -C "$FIXTURE" add -A
-  git -C "$FIXTURE" commit -q -m "fixture baseline"
+  fixture_commit "fixture baseline"
 }
 
 LAST_RC=0
@@ -162,9 +172,9 @@ rm -f "$FIXTURE/longline.txt"
 # T15 — a deny-list pattern valid for the matcher but invalid as a POSIX ERE must
 # still be matched, in the tree and in history.
 printf 'host: %s\n' "$LEAK_ID" > "$FIXTURE/ere-case.txt"
-git -C "$FIXTURE" add -A && git -C "$FIXTURE" commit -q -m "fixture for an ERE-incompatible pattern"
+git -C "$FIXTURE" add -A && fixture_commit "fixture for an ERE-incompatible pattern"
 rm -f "$FIXTURE/ere-case.txt"
-git -C "$FIXTURE" add -A && git -C "$FIXTURE" commit -q -m "fixture removes it from the tree"
+git -C "$FIXTURE" add -A && fixture_commit "fixture removes it from the tree"
 run_gate "IDENTITY_DENYLIST=$ERE_DENY" "EXPECTED_IDENTITY_EMAIL=$PROJECT_EMAIL"
 check ere_incompatible_pattern_still_matches 1 'HIT blob'
 
@@ -182,7 +192,7 @@ printf 'another line\n' >> "$FIXTURE/README.md"
 git -C "$FIXTURE" add -A
 GIT_AUTHOR_NAME="Some Other Person" GIT_AUTHOR_EMAIL="someone@example.test" \
   GIT_COMMITTER_NAME="Some Other Person" GIT_COMMITTER_EMAIL="someone@example.test" \
-  git -C "$FIXTURE" commit -q -m "fixture with foreign identity"
+  git -C "$FIXTURE" commit -q -m "fixture with foreign identity"   # deliberately unpinned
 run_gate "${AUTH_ENV[@]}"
 check foreign_identity_reported 1 'HIT identity name'
 
@@ -202,7 +212,9 @@ EXEMPT_EMAIL="${OWNER_ID}@users.noreply.github.com"
 # Every commit in this fixture carries the exempted account, so the declared
 # expectation matches and the only question is how the gate reports it.
 git -C "$FIXTURE" config user.email "$EXEMPT_EMAIL"
-git -C "$FIXTURE" commit -q --amend --reset-author --no-edit
+GIT_AUTHOR_NAME="$PROJECT_NAME" GIT_AUTHOR_EMAIL="$EXEMPT_EMAIL" \
+GIT_COMMITTER_NAME="$PROJECT_NAME" GIT_COMMITTER_EMAIL="$EXEMPT_EMAIL" \
+  git -C "$FIXTURE" commit -q --amend --reset-author --no-edit
 run_gate "IDENTITY_DENYLIST=$DENY" "EXPECTED_IDENTITY_EMAIL=$EXEMPT_EMAIL"
 check exempted_identity_reported_as_known 0 'KNOWN-IDENTITY-EXCEPTION'
 
@@ -241,7 +253,9 @@ printf '%s :: declared test exception, slug form\n%s :: declared test exception,
   "$OWNER_ID" "$ADDR" > "$FIXTURE/scripts/identity-exemptions.txt"
 printf '%s\n%s\n' "$OWNER_ID" "$ADDR" > "$WORK/two-line-denylist.txt"
 git -C "$FIXTURE" config user.email "$ADDR"
-git -C "$FIXTURE" commit -q --amend --reset-author --no-edit
+GIT_AUTHOR_NAME="$PROJECT_NAME" GIT_AUTHOR_EMAIL="$ADDR" \
+GIT_COMMITTER_NAME="$PROJECT_NAME" GIT_COMMITTER_EMAIL="$ADDR" \
+  git -C "$FIXTURE" commit -q --amend --reset-author --no-edit
 run_gate "IDENTITY_DENYLIST=$WORK/two-line-denylist.txt" "EXPECTED_IDENTITY_EMAIL=$ADDR"
 check slug_and_address_denylist_declared 0 'identity_scan=PASS_WITH_DECLARED_EXCEPTIONS'
 

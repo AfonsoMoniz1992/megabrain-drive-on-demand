@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.9 — the self-test no longer depends on the ambient Git environment
+
+### Fixed
+
+- **The fixtures inherited any exported `GIT_AUTHOR_*`/`GIT_COMMITTER_*` variable.** Those variables override `git config`, so a shell that exported an identity made six scenarios fail for a reason that had nothing to do with the gate. Every fixture commit and amendment now pins its identity explicitly, and the scenarios that deliberately use a foreign identity still opt out. Verified green with the variables exported and with a clean environment.
+
 ## v1.0.8 — evidence ordering in the gate output
 
 ### Fixed
