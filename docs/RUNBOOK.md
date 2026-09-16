@@ -218,53 +218,56 @@ cache no-overwrite, and no create/rename/move/trash/delete request anywhere.
 ## 8. Identity scan before every public push, tag or release
 
 ```bash
-IDENTITY_DENYLIST=/secure/path/identity-denylist.txt bash scripts/identity-scan.sh .
-# identity_scan=PASS enforced_hits=0 exemptions_used=<N>
-bash scripts/identity-scan-selftest.sh          # 10 adversarial scenarios
+IDENTITY_DENYLIST=/secure/path/identity-denylist.txt python3 scripts/identity_scan.py .
+# identity_scan=PASS_WITH_DECLARED_EXCEPTIONS
+bash scripts/identity-scan-selftest.sh          # 18 adversarial scenarios
 # identity_scan_selftest=PASS
 ```
 
-**A deny-list is required.** It lives outside the tree (a committed deny-list
-leaks what it lists) and must list your own host, account, project and chat
-identifiers, including the public account you publish from — otherwise the
-declared exemption below is never exercised. Without it the gate **fails**
-instead of reporting a pass, because it would only be proving the built-in
-patterns. `IDENTITY_ALLOW_NO_DENYLIST=1` allows a smoke run that prints
-`non-authoritative`.
+**Verdicts and exit status.** `PASS` (nothing found, nothing declared, nothing
+used) and `PASS_WITH_DECLARED_EXCEPTIONS` exit 0; `FAIL` exits 1; a configuration
+error exits 2. The verdict is never a plain `PASS` while a declared exception is
+in play, so a green run cannot hide one.
 
-**Four surfaces, scanned at line level:** the working tree, every reachable blob,
-every commit and tag message, the Git identity metadata (author, committer,
-tagger — the deny-list applies to those fields themselves), plus the release
-artefacts on disk.
+**A deny-list is required and must be usable.** It lives outside the tree (a
+committed deny-list leaks what it lists) and must contain at least one valid
+regex; empty, comment-only or invalid deny-lists are configuration errors, not
+passes. `IDENTITY_ALLOW_NO_DENYLIST=1` allows a smoke run that reports itself as
+non-authoritative — that is what CI runs, because CI has no operator deny-list.
 
-**Declared exclusions, reported with counts on every run:** `.git` and
-`node_modules` (neither is distributed; content that reaches a release surfaces
-under the artefact scan, which is exactly where bundled dependencies appear) and
-exactly two paths inside `scripts/`: the scanner, whose detector patterns are
-literals in it, and the exemptions file, which must name what it exempts. There
-is no basename-wide or wildcard exclusion.
+**Five surfaces.** Working-tree contents **and file names**, every reachable
+blob and path, every commit and tag message, the Git identity metadata, and the
+release artefacts.
 
-**Declared exemptions.** `scripts/identity-exemptions.txt` holds
-`regex :: justification` lines; a line without a justification fails the gate.
-Masking is per identifier, not per line: the exempted substring is removed from
-the candidate line and the **remainder is re-scanned**, so an exempted value can
-never hide a co-located forbidden identifier. Every masked hit is printed as
-`EXEMPT ... <= <why>`.
+**How matching works** (the reason it is not a shell script): every candidate
+text is matched against every pattern with full spans, and each match is
+classified by whether its *whole* span is covered by a declared exemption —
+fully covered is `EXEMPT`, partially covered is a hit, uncovered is a hit.
+Nothing is truncated before analysis. That closes truncation, ordering,
+partial-overlap and regex-delimiter bypasses at once.
 
-**Strict mode.** `IDENTITY_REQUIRE_NO_EXEMPTIONS=1` fails if an exemption was used
-*or* declared, so for this repository it fails in every configuration and prints
-both reasons — an exemption used, and an exception declared. That failure is the
-honest measure of the declared owner-account exception; it disappears if you
-publish from a project-owned account and declare nothing.
+**Declared exemptions** (`scripts/identity-exemptions.txt`, `regex ::
+justification`) are printed as `EXEMPT ... <= <why>`; a line without a
+justification fails the run. They never silence the identity metadata: a match
+there is reported as `KNOWN-IDENTITY-EXCEPTION`, counted, and forces the verdict
+to `PASS_WITH_DECLARED_EXCEPTIONS`.
 
-**The gate is itself tested.** `scripts/identity-scan-selftest.sh` builds a
-disposable fixture repository with run-time-generated sample identifiers and
-checks ten scenarios, including the two ways the gate could previously be
-bypassed: a forbidden identifier on the same line as an exempted value, and one
-planted at a path other than the scanner's own. Its samples are generated so the
-test file needs no exclusion from the scan it exercises.
+**Not scanned, by scope decision:** `.git` and `node_modules` (neither is
+distributed, and content that reaches a release is caught by the artefact
+surface). No file inside the tree is excluded by path: a forbidden identifier
+planted in any file, any file name or any historical blob is reported.
 
-Approval criteria (exit 0): a deny-list present; zero enforced hits on all four
-surfaces; every identity name equal to `EXPECTED_IDENTITY_NAME`; every identity
-address matching `ALLOWED_IDENTITY_EMAIL_RE`; every exemption justified; and, in
-strict mode, nothing declared and nothing used.
+**Strict mode** `IDENTITY_REQUIRE_NO_EXEMPTIONS=1` fails when an exemption is
+used, when one is declared, or when a known identity exception exists, and prints
+each reason. For this repository it fails in every configuration, which is the
+honest measure of the declared owner-account exception.
+
+**The gate is itself tested:** 18 scenarios, each checking the **exit status**
+and the expected output, because a gate that prints FAIL and returns success is
+exactly the failure a text-only test misses. Scenarios cover missing, empty,
+comment-only and invalid deny-lists; identifiers planted in another file, in a
+file name, and under the tool's own basename elsewhere; co-location and partial
+overlap with an exempted value; a forbidden value 400 characters into a line; an
+exemption pattern containing a path separator; a leak present in history but
+removed from the tree; identity metadata outside the policy; metadata matching a
+declared exemption; and the smoke-mode flag.

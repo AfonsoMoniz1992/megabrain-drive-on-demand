@@ -18,9 +18,10 @@ Two different things were cleaned, and they carry different evidence:
 
 - **Historical contents and file names.** Every reachable commit, blob and tag
   message was rewritten, and the whole history uses the project's generic names.
-  This is a checked claim: `scripts/identity-scan.sh` scans the working tree, the
-  whole reachable history and the release artefacts, and the approval criteria in
-  `docs/RUNBOOK.md` section 8 must pass before publishing.
+  This is a checked claim: `scripts/identity_scan.py` scans the working-tree contents
+  and names, the whole reachable history and its paths, commit and tag messages,
+  and the release artefacts; the approval criteria are in `docs/RUNBOOK.md`
+  section 8.
 - **Git identity metadata.** Authors, committers and taggers carry the declared
   project policy identity: the name `obsidian-gdrive-streaming` and the
   distributing account's GitHub noreply address. This is enforced by the gate,
@@ -28,44 +29,37 @@ Two different things were cleaned, and they carry different evidence:
 
 The exact claim, so that it can be checked or refuted:
 
-- **enforced:** zero operator-infrastructure identifiers — hostnames, tailnet
-  domains, private addresses, cloud project and client ids, Drive ids, secret
-  labels, account mailboxes — across the tree, the whole reachable history, the
-  commit and tag messages, the Git identity fields and the release artefacts,
-  under a deny-list that the operator supplies from outside the tree. An
-  authoritative run requires that deny-list: without it the gate refuses to
-  report a pass;
-- **declared exception:** the public account that distributes the plugin. The
+- **enforced:** zero hits for the operator's out-of-tree deny-list and for the
+  built-in patterns (tailnet domains, private addresses, consumer mailboxes,
+  Google OAuth client ids, Drive links, service accounts) across working-tree
+  contents and file names, the whole reachable history and its paths, commit and
+  tag messages, the Git identity fields and the release artefacts. An
+  authoritative run requires that deny-list: without one the gate reports a
+  configuration error instead of a pass.
+- **declared exception:** the public account that distributes the plugin. A
+  repository published under one cannot claim to carry no owner identity: the
   installation instructions must name the slug a user types into BRAT, and the
   Git identity uses that account's noreply address so commits stay attributed.
-  The exception is listed with a justification in
-  `scripts/identity-exemptions.txt`, and every gate run prints each hit it
-  silences together with that justification;
-- **not claimed:** that the repository carries no owner identity anywhere. A
-  repository published under a personal account cannot claim that without moving
-  to a project-owned account. `IDENTITY_REQUIRE_NO_EXEMPTIONS=1` fails in every
-  configuration for this repository — because an exemption is both declared and
-  used — and prints both reasons. That failure is the honest measure of the
-  difference, and it disappears if you publish from a project-owned account.
+  The exception is listed with a justification in `scripts/identity-exemptions.txt`;
+  every masked hit is printed with that justification, and a match in the Git
+  identity metadata is reported as a known exception rather than silenced. The
+  verdict for this repository is therefore `PASS_WITH_DECLARED_EXCEPTIONS`, never
+  a plain `PASS`.
+- **not claimed:** that the repository carries no owner identity anywhere, and
+  that the gate proves absence rather than detecting what its patterns describe.
+  `IDENTITY_REQUIRE_NO_EXEMPTIONS=1` fails in every configuration for this
+  repository and prints every reason; that failure is the honest measure of the
+  difference, and it disappears if you publish from a project-owned account and
+  declare nothing.
+- **scope decisions, not gate properties:** `.git` and `node_modules` are not
+  scanned (neither is distributed; content that reaches a release is caught by the
+  artefact surface), and the authoritative run is a manual step with an operator
+  deny-list — CI runs the gate self-test and a non-authoritative built-in-pattern
+  scan on every push.
 
-The gate's own behaviour is tested, not asserted: `scripts/identity-scan-selftest.sh`
-builds a disposable fixture and checks ten scenarios, including a forbidden
-identifier co-located with an exempted value on one line and one planted at a path
-other than the scanner's own. Masking is per identifier, and the remainder of a
-line is re-scanned after masking, so an exemption cannot hide anything else.
-
-Residual risk, stated so it is not overread:
-
-- The scan covers every object reachable from the published refs. It cannot prove
-  the absence of objects that the host may still serve from earlier force-pushed
-  states; treat any previously published commit SHA as public.
-- Tags are recreated and unsigned, so tag timestamps and tagger metadata are not
-  provenance evidence and are not an identity attestation.
-- The reproducible build (a fresh clone rebuilds `main.js` byte-for-byte) covers
-  one thing only: that the distributed artefact corresponds to the published
-  source. It is not a signature, not a supply-chain attestation, and not proof of
-  who built or published it.
-- The scan is a detector, not a proof: it finds what its patterns describe. A
-  leak in a shape nobody modelled stays invisible, so extend
-  `IDENTITY_DENYLIST` for your own host, account, project and chat names.
+The gate's behaviour is tested rather than asserted: `scripts/identity-scan-selftest.sh`
+runs 18 adversarial scenarios against a disposable fixture, each checking the exit
+status and the expected output, including identifiers planted only in a file name,
+co-located or partially overlapping with an exempted value, and a leak present in
+history but removed from the tree.
 

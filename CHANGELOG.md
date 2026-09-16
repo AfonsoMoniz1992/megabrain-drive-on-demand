@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.0.5 — fifth-review fixes (the gate is rewritten, not patched)
+
+The scan was rewritten from shell to Python because five of the defects found in
+review were consequences of doing regex work by piping text through `grep`, `sed`
+and `cut`. Matching now works on spans.
+
+### Fixed
+
+- **Truncation before analysis.** The shell version cut every candidate line to 180 characters *before* classifying it, so a forbidden value further along the line was never examined — on the tree and on the artefacts. Nothing is truncated before analysis now.
+- **Partial overlap.** An exemption matching only part of a forbidden value (a prefix, or a value sharing a line) could leave the remainder unmatched and be treated as clean. A match is exempt only when its **whole** span is covered by a declared exemption; partial cover is a hit.
+- **Exemptions via `sed`.** A pattern containing the delimiter used by the masking step behaved inconsistently. Matching no longer builds a second regex out of the first.
+- **Deny-lists that fail open.** An empty, comment-only or invalid deny-list was treated as "present" and could yield a pass. The gate now requires at least one valid pattern, rejects invalid regexes, and exits 2 as a configuration error.
+- **Path exclusions built as regexes.** The two excluded paths were matched as unescaped regexes, so a near-identical sibling name was also excluded. There are no path exclusions inside the tree any more: file names and contents are both scanned.
+- **File and directory names were never scanned.** An identifier in a file name passed; names are now a scanned surface, in the tree and in history.
+- **Identity metadata could be silenced by an exemption.** Matches in the Git identity fields are now reported as `KNOWN-IDENTITY-EXCEPTION` and force the verdict to `PASS_WITH_DECLARED_EXCEPTIONS`, so a plain `PASS` can never hide the declared account.
+- **The self-test did not check exit status.** Every scenario asserted only on output text, so a gate that printed `FAIL` and returned success would have passed. Each of the 18 scenarios now checks the exit status *and* the expected output, and the scenarios cover every defect above: missing, empty, comment-only and invalid deny-lists; identifiers planted in another file, in a file name, and under the tool's own basename elsewhere; co-location and partial overlap; a forbidden value 400 characters into a line; an exemption pattern containing a path separator; a leak present in history but removed from the tree; metadata outside the policy; metadata matching a declared exemption; and smoke-mode flagging.
+
+### Added
+
+- CI runs the gate self-test and a non-authoritative built-in-pattern scan on every push (`.github/workflows/verify.yml`). The authoritative run stays manual because it needs an operator deny-list, which must live outside the tree.
+
+### Changed
+
+- Verdicts are now `PASS`, `PASS_WITH_DECLARED_EXCEPTIONS` or `FAIL`; exit status 0 / 0 / 1, with 2 for configuration errors. `docs/RUNBOOK.md` section 8 and `PUBLICATION_PLAN.md` were rewritten so each claim matches what the gate proves, including what is deliberately not scanned.
+
 ## v1.0.4 — fourth-review fixes (gate could pass while hiding things)
 
 ### Fixed

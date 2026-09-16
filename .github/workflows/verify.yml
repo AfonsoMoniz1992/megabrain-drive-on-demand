@@ -19,6 +19,15 @@ jobs:
       - run: npm ci
       - run: npm run verify
       - run: npm audit --omit=dev
+      - name: Identity gate self-test and built-in pattern scan
+        run: |
+          # The gate's own scenarios run with generated fixtures, so no external
+          # deny-list is needed here. The scan itself then runs with built-in
+          # patterns only, which the tool reports as non-authoritative: an
+          # authoritative run needs the operator's out-of-tree deny-list and is
+          # documented in docs/RUNBOOK.md section 8.
+          bash scripts/identity-scan-selftest.sh
+          IDENTITY_ALLOW_NO_DENYLIST=1 python3 scripts/identity_scan.py .
       - name: Verify release artifact allowlist
         run: |
           test -s main.js

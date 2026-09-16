@@ -1,43 +1,46 @@
 #!/usr/bin/env bash
 #
-# Adversarial self-test for scripts/identity-scan.sh.
+# Adversarial self-test for scripts/identity_scan.py.
 #
-# A gate that has never failed has not been tested. This script builds a
-# disposable fixture repository and checks that the gate fails exactly when it
-# should, including the two ways it was previously possible to slip past it:
-# a forbidden identifier sharing a line with an exempted value, and a forbidden
-# identifier planted at a path other than the scanner's own.
+# Two things are verified for every scenario: the EXIT STATUS (the gate's actual
+# approval criterion) and the expected line in the output. Checking only output
+# text would pass a gate that prints FAIL and returns success.
 #
 # Every sample identifier is generated at run time, so this file contains no
 # literal identifier and needs no exclusion from the scan it exercises.
 #
 # Usage: scripts/identity-scan-selftest.sh
-# Exit 0 only when every scenario behaves as documented.
 #
 set -euo pipefail
 
-SCANNER_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/identity-scan.sh"
+SCANNER_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/identity_scan.py"
 [[ -r "$SCANNER_SRC" ]] || { echo "selftest=FAIL (scanner not found)"; exit 1; }
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 FIXTURE="$WORK/fixture"
 DENY="$WORK/denylist.txt"
+EMPTY_DENY="$WORK/empty.txt"
+COMMENT_DENY="$WORK/comments.txt"
+INVALID_DENY="$WORK/invalid.txt"
 
-# Sample identifiers, assembled here and never written as literals. The tailnet
-# domain is split so that this file does not match the pattern it tests.
 NONCE="zz$$$(date +%s)"
 OWNER_ID="zzowner${NONCE}"
 LEAK_ID="zzleak${NONCE}"
 HOST_ID="zzhost${NONCE}"
 HOST_FQDN="${HOST_ID}.t""s.n""et"
-printf '%s\n%s\n%s\n' "$LEAK_ID" "$OWNER_ID" "$HOST_ID" > "$DENY"
+SLASH_ID="zz/path${NONCE}"
+
+printf '%s\n%s\n%s\n%s\n' "$LEAK_ID" "$OWNER_ID" "$HOST_ID" "$SLASH_ID" > "$DENY"
+: > "$EMPTY_DENY"
+printf '# only comments here\n\n' > "$COMMENT_DENY"
+printf 'valid%s\n[unclosed\n' "$NONCE" > "$INVALID_DENY"
 
 build_fixture() {   # $1 = "declaring" | "empty"
   rm -rf "$FIXTURE"
   mkdir -p "$FIXTURE/scripts"
-  cp "$SCANNER_SRC" "$FIXTURE/scripts/identity-scan.sh"
-  chmod +x "$FIXTURE/scripts/identity-scan.sh"
+  cp "$SCANNER_SRC" "$FIXTURE/scripts/identity_scan.py"
+  chmod +x "$FIXTURE/scripts/identity_scan.py"
   if [[ "$1" == "declaring" ]]; then
     printf '%s :: declared test exception for the selftest fixture\n' "$OWNER_ID" \
       > "$FIXTURE/scripts/identity-exemptions.txt"
@@ -52,75 +55,142 @@ build_fixture() {   # $1 = "declaring" | "empty"
   git -C "$FIXTURE" commit -q -m "fixture baseline"
 }
 
-run_gate() {        # env assignments as arguments; prints combined output
-  ( cd "$FIXTURE" && env "$@" bash scripts/identity-scan.sh . 2>&1 )
+LAST_RC=0
+LAST_OUT=""
+run_gate() {        # env assignments as arguments
+  LAST_RC=0
+  LAST_OUT="$( cd "$FIXTURE" && env "$@" python3 scripts/identity_scan.py . 2>&1 )" || LAST_RC=$?
 }
 
 failures=0
-check() {           # $1 name, $2 expected 0/1, $3 output, $4 expected pattern
-  local name="$1" expected="$2" out="$3" pattern="$4" actual=0
-  grep -qE -- "$pattern" <<<"$out" || actual=1
-  if [[ "$actual" == "$expected" ]]; then
+check() {           # $1 name, $2 expected rc, $3 expected pattern
+  local name="$1" expected_rc="$2" pattern="$3"
+  if [[ "$LAST_RC" == "$expected_rc" ]] && grep -qE -- "$pattern" <<<"$LAST_OUT"; then
     printf 'selftest_%s=PASS\n' "$name"
   else
-    printf 'selftest_%s=FAIL (exit=%s expected=%s pattern=%s)\n' "$name" "$actual" "$expected" "$pattern"
+    printf 'selftest_%s=FAIL (rc=%s expected_rc=%s pattern=%s)\n' "$name" "$LAST_RC" "$expected_rc" "$pattern"
     failures=$((failures + 1))
   fi
 }
 
-# T1 — no deny-list at all: the gate must refuse to pass.
 build_fixture declaring
-out="$(run_gate IDENTITY_ALLOW_NO_DENYLIST=0 || true)"
-check no_denylist_refused 0 "$out" 'identity_scan=FAIL \(no deny-list'
 
-# T2 — clean fixture with a deny-list: the gate passes.
-out="$(run_gate "IDENTITY_DENYLIST=$DENY" || true)"
-check clean_fixture_passes 0 "$out" 'identity_scan=PASS'
+# T1 — no deny-list: configuration error, exit 2.
+run_gate IDENTITY_ALLOW_NO_DENYLIST=0
+check no_denylist_refused 2 'no deny-list'
 
-# T3 — strict mode must fail because the fixture declares an exception.
-out="$(run_gate "IDENTITY_DENYLIST=$DENY" IDENTITY_REQUIRE_NO_EXEMPTIONS=1 || true)"
-check strict_mode_fails_on_declaration 0 "$out" 'strict_mode_failure=exemptions_declared'
+# T2 — empty deny-list: still a configuration error, not a pass.
+run_gate "IDENTITY_DENYLIST=$EMPTY_DENY"
+check empty_denylist_refused 2 'no usable pattern'
 
-# T4 — forbidden identifier at another path: must be reported.
+# T3 — comment-only deny-list: same.
+run_gate "IDENTITY_DENYLIST=$COMMENT_DENY"
+check comment_only_denylist_refused 2 'no usable pattern'
+
+# T4 — invalid regex in the deny-list: refused, never ignored.
+run_gate "IDENTITY_DENYLIST=$INVALID_DENY"
+check invalid_denylist_pattern_refused 2 'invalid deny-list pattern'
+
+# T5 — clean fixture with an empty exemptions file: a plain PASS.
+build_fixture empty
+run_gate "IDENTITY_DENYLIST=$DENY"
+check clean_fixture_plain_pass 0 '^identity_scan=PASS$'
+
+# T6 — declared exemption: pass, but never a plain PASS.
+build_fixture declaring
+printf '%s lives here\n' "$OWNER_ID" > "$FIXTURE/notes.txt"
+run_gate "IDENTITY_DENYLIST=$DENY"
+check declared_exception_not_plain_pass 0 'identity_scan=PASS_WITH_DECLARED_EXCEPTIONS'
+
+# T7 — strict mode fails on the declaration alone.
+run_gate "IDENTITY_DENYLIST=$DENY" IDENTITY_REQUIRE_NO_EXEMPTIONS=1
+check strict_mode_fails_on_declaration 1 'strict_mode_failure=.*exemptions_declared'
+
+# T8 — identifier planted at another path.
 mkdir -p "$FIXTURE/sub" && printf 'host: %s\n' "$LEAK_ID" > "$FIXTURE/sub/other.txt"
-out="$(run_gate "IDENTITY_DENYLIST=$DENY" || true)"
-check planted_identifier_reported 0 "$out" 'HIT tree ./sub/other.txt'
+run_gate "IDENTITY_DENYLIST=$DENY"
+check planted_identifier_reported 1 'HIT tree sub/other.txt'
 rm -rf "$FIXTURE/sub"
 
-# T5 — the scanner's own basename at another path: must still be reported.
-mkdir -p "$FIXTURE/sub" && printf 'host: %s\n' "$LEAK_ID" > "$FIXTURE/sub/identity-scan.sh"
-out="$(run_gate "IDENTITY_DENYLIST=$DENY" || true)"
-check same_basename_other_path_reported 0 "$out" 'HIT tree ./sub/identity-scan.sh'
+# T9 — the scanner's own basename at another path.
+mkdir -p "$FIXTURE/sub" && printf 'host: %s\n' "$LEAK_ID" > "$FIXTURE/sub/identity_scan.py"
+run_gate "IDENTITY_DENYLIST=$DENY"
+check same_basename_other_path_reported 1 'HIT tree sub/identity_scan.py'
 rm -rf "$FIXTURE/sub"
 
-# T6 — an exempted identifier must not hide a co-located forbidden identifier.
+# T10 — identifier hidden only in a file name.
+printf 'nothing to see here\n' > "$FIXTURE/notes-$LEAK_ID.txt"
+run_gate "IDENTITY_DENYLIST=$DENY"
+check filename_identifier_reported 1 'HIT tree-path'
+rm -f "$FIXTURE/notes-$LEAK_ID.txt"
+
+# T11 — co-location: an exempted value must not hide a forbidden one.
 printf '%s and %s on one line\n' "$OWNER_ID" "$HOST_FQDN" > "$FIXTURE/scratch.txt"
-out="$(run_gate "IDENTITY_DENYLIST=$DENY" || true)"
-check co_located_identifier_reported 0 "$out" 'co-located'
+run_gate "IDENTITY_DENYLIST=$DENY"
+check co_located_identifier_reported 1 'partially covered|HIT tree scratch.txt'
 rm -f "$FIXTURE/scratch.txt"
 
-# T7 — an exemption without a justification fails the gate.
-printf '%s\n' "$OWNER_ID" > "$FIXTURE/scripts/identity-exemptions.txt"
-out="$(run_gate "IDENTITY_DENYLIST=$DENY" || true)"
-check unjustified_exemption_fails 0 "$out" 'exemption_without_justification'
+# T12 — partial overlap: the exemption matches only a prefix of a forbidden value.
+printf '%s.%s.%s\n' "$OWNER_ID" "t""s" "n""et" > "$FIXTURE/partial.txt"
+run_gate "IDENTITY_DENYLIST=$DENY"
+check partial_overlap_reported 1 'partially covered'
+rm -f "$FIXTURE/partial.txt"
 
-# T8 — a fixture with no declared exception passes even in strict mode.
+# T13 — forbidden value placed far beyond any display truncation point.
+python3 - "$FIXTURE/longline.txt" "$OWNER_ID" "$HOST_FQDN" <<'PY'
+import sys
+path, owner, host = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(path, "w", encoding="utf-8") as handle:
+    handle.write(owner + " " + "x" * 400 + " " + host + "\n")
+PY
+run_gate "IDENTITY_DENYLIST=$DENY"
+check far_identifier_reported 1 'partially covered|HIT tree longline.txt'
+rm -f "$FIXTURE/longline.txt"
+
+# T14 — an exemption whose pattern contains a slash behaves consistently.
 build_fixture empty
-out="$(run_gate "IDENTITY_DENYLIST=$DENY" IDENTITY_REQUIRE_NO_EXEMPTIONS=1 || true)"
-check strict_mode_passes_without_exemptions 0 "$out" 'identity_scan=PASS'
+printf '# none\n' > "$FIXTURE/scripts/identity-exemptions.txt"
+printf '%s :: exemption containing a path separator\n' "$SLASH_ID" >> "$FIXTURE/scripts/identity-exemptions.txt"
+printf 'value: %s\n' "$SLASH_ID" > "$FIXTURE/notes.txt"
+run_gate "IDENTITY_DENYLIST=$DENY"
+check exemption_with_separator_ok 0 'identity_scan=PASS_WITH_DECLARED_EXCEPTIONS'
+rm -f "$FIXTURE/notes.txt"
 
-# T9 — smoke mode without a deny-list is possible, and says it is not authoritative.
-out="$(run_gate IDENTITY_ALLOW_NO_DENYLIST=1 || true)"
-check smoke_mode_flagged 0 "$out" 'non-authoritative run'
-
-# T10 — a leak committed to history (not only the working tree) is reported.
+# T15 — a leak that exists in history but no longer in the tree.
 build_fixture declaring
 printf 'host: %s\n' "$LEAK_ID" > "$FIXTURE/history-leak.txt"
 git -C "$FIXTURE" add -A && git -C "$FIXTURE" commit -q -m "fixture with a leak"
 rm -f "$FIXTURE/history-leak.txt"
 git -C "$FIXTURE" add -A && git -C "$FIXTURE" commit -q -m "fixture leak removed from the tree"
-out="$(run_gate "IDENTITY_DENYLIST=$DENY" || true)"
-check history_leak_reported 0 "$out" 'HIT blob'
+run_gate "IDENTITY_DENYLIST=$DENY"
+check history_leak_reported 1 'HIT blob'
+
+# T16 — Git identity metadata outside the policy is reported.
+build_fixture empty
+printf 'another line\n' >> "$FIXTURE/README.md"
+git -C "$FIXTURE" add -A
+GIT_AUTHOR_NAME="Some Other Person" GIT_AUTHOR_EMAIL="someone@example.test" \
+  GIT_COMMITTER_NAME="Some Other Person" GIT_COMMITTER_EMAIL="someone@example.test" \
+  git -C "$FIXTURE" commit -q -m "fixture with foreign identity"
+run_gate "IDENTITY_DENYLIST=$DENY"
+check foreign_identity_reported 1 'HIT identity name'
+
+# T17 — metadata matching a declared exemption is KNOWN, never silenced, and blocks a plain PASS.
+build_fixture declaring
+printf 'another line\n' >> "$FIXTURE/README.md"
+git -C "$FIXTURE" add -A
+# The policy name is kept, and the declared-exception identifier sits in the
+# address: it must be reported as KNOWN, never silenced, and never a plain PASS.
+GIT_AUTHOR_NAME="obsidian-gdrive-streaming" GIT_AUTHOR_EMAIL="${OWNER_ID}@users.noreply.github.com" \
+  GIT_COMMITTER_NAME="obsidian-gdrive-streaming" GIT_COMMITTER_EMAIL="${OWNER_ID}@users.noreply.github.com" \
+  git -C "$FIXTURE" commit -q -m "fixture with an exempted identity"
+run_gate "IDENTITY_DENYLIST=$DENY"
+check exempted_identity_reported_as_known 0 'KNOWN-IDENTITY-EXCEPTION'
+
+# T18 — smoke mode without a deny-list is possible and says it is not authoritative.
+build_fixture empty
+run_gate IDENTITY_ALLOW_NO_DENYLIST=1
+check smoke_mode_flagged 0 'non-authoritative run'
 
 echo "selftest_failures=${failures}"
 if [[ "$failures" -eq 0 ]]; then
